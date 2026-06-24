@@ -1,0 +1,23 @@
+{
+  "name": "@traceguard/demo-api",
+  "version": "0.1.0",
+  "private": true,
+  "description": "API Express de demonstração do módulo RASP TraceGuard",
+  "scripts": {
+    "build": "tsc",
+    "dev": "tsx src/index.ts",
+    "scrape": "tsx src/scraper-sim.ts",
+    "start": "node dist/index.js"
+  },
+  "dependencies": {
+    "@traceguard/sdk": "workspace:*",
+    "express": "^5.1.0",
+    "ioredis": "^5.6.1"
+  },
+  "devDependencies": {
+    "@types/express": "^5.0.2",
+    "@types/node": "^22.15.21",
+    "tsx": "^4.19.4",
+    "typescript": "^5.8.3"
+  }
+}
