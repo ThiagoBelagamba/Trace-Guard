@@ -1,0 +1,46 @@
+{
+  "name": "@traceguard/sdk",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Agente de telemetria TraceGuard — async_hooks + perf_hooks",
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js",
+      "require": "./dist/index.js"
+    },
+    "./express": {
+      "types": "./dist/interceptors/express.d.ts",
+      "import": "./dist/interceptors/express.js",
+      "require": "./dist/interceptors/express.js"
+    }
+  },
+  "peerDependencies": {
+    "express": "^4.18.0 || ^5.0.0",
+    "ioredis": "^5.0.0"
+  },
+  "peerDependenciesMeta": {
+    "express": {
+      "optional": true
+    },
+    "ioredis": {
+      "optional": true
+    }
+  },
+  "scripts": {
+    "build": "tsc",
+    "dev": "tsc --watch"
+  },
+  "dependencies": {
+    "@traceguard/shared": "workspace:*",
+    "ioredis": "^5.6.1"
+  },
+  "devDependencies": {
+    "@types/express": "^5.0.2",
+    "@types/node": "^22.15.21",
+    "express": "^5.1.0",
+    "typescript": "^5.8.3"
+  }
+}
