@@ -1,0 +1,11 @@
+# Overrides locais para desenvolvimento (opcional).
+# Exemplo: montar código fonte em volume para hot-reload.
+
+services:
+  backend:
+    profiles:
+      - full
+
+  dashboard:
+    profiles:
+      - full

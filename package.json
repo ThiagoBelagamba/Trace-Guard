@@ -1,0 +1,35 @@
+{
+  "name": "traceguard",
+  "version": "0.1.0",
+  "private": true,
+  "description": "TraceGuard — Plataforma Unificada de Observabilidade, APM e Monitoramento de Uptime Self-Hosted",
+  "scripts": {
+    "build": "pnpm --filter @traceguard/shared --filter @traceguard/sdk --filter @traceguard/backend --filter @traceguard/demo-app --filter @traceguard/demo-api --filter @traceguard/dashboard run build",
+    "build:core": "pnpm --filter @traceguard/shared --filter @traceguard/sdk --filter @traceguard/backend --filter @traceguard/demo-app run build",
+    "build:all": "pnpm -r run build",
+    "dev": "concurrently -n backend,dashboard -c blue,green \"pnpm dev:backend\" \"pnpm dev:dashboard\"",
+    "dev:backend": "pnpm --filter @traceguard/backend dev",
+    "dev:demo": "pnpm --filter @traceguard/demo-app dev",
+    "dev:demo:stress": "pnpm --filter @traceguard/demo-app dev:stress",
+    "dev:demo-api": "pnpm --filter @traceguard/demo-api dev",
+    "demo:scrape": "pnpm --filter @traceguard/demo-api scrape",
+    "dev:dashboard": "pnpm --filter @traceguard/dashboard dev",
+    "docker:up": "docker compose up -d postgres rabbitmq redis",
+    "docker:up:all": "docker compose up -d --build",
+    "docker:down": "docker compose down",
+    "docker:logs": "docker compose logs -f",
+    "db:migrate": "docker compose exec -T postgres psql -U traceguard -d traceguard -f /docker-entrypoint-initdb.d/002_alerts_schema.sql && docker compose exec -T postgres psql -U traceguard -d traceguard -f /docker-entrypoint-initdb.d/003_rasp_schema.sql && docker compose exec -T postgres psql -U traceguard -d traceguard -f /docker-entrypoint-initdb.d/004_uptime_schema.sql",
+    "db:migrate:uptime": "docker compose exec -T postgres psql -U traceguard -d traceguard -f /docker-entrypoint-initdb.d/004_uptime_schema.sql",
+    "docker:up:prod": "docker compose -f docker-compose.yml -f docker-compose.prod.yml up -d --build",
+    "load:test": "docker run --rm -i -v \"%cd%/scripts/load-test:/scripts\" grafana/k6 run -e API_URL=http://host.docker.internal:3001 /scripts/k6-ingest.js",
+    "load:test:rasp": "docker run --rm -i -v \"%cd%/scripts/load-test:/scripts\" grafana/k6 run -e DEMO_API_URL=http://host.docker.internal:4000 /scripts/k6-rasp.js",
+    "db:migrate:rasp": "docker compose exec -T postgres psql -U traceguard -d traceguard -f /docker-entrypoint-initdb.d/003_rasp_schema.sql"
+  },
+  "engines": {
+    "node": ">=20.0.0",
+    "pnpm": ">=9.0.0"
+  },
+  "devDependencies": {
+    "concurrently": "^9.1.2"
+  }
+}

@@ -1,0 +1,23 @@
+# Override para deploy self-hosted em produção (Fase 5)
+services:
+  backend:
+    restart: unless-stopped
+    environment:
+      REDIS_URL: redis://redis:6379
+      ALERT_WEBHOOK_URL: ${ALERT_WEBHOOK_URL:-}
+      CORS_ORIGIN: ${CORS_ORIGIN:-http://localhost:3000}
+
+  dashboard:
+    restart: unless-stopped
+    environment:
+      NEXT_PUBLIC_API_URL: ${PUBLIC_API_URL:-http://localhost:3001}
+      NEXT_PUBLIC_WS_URL: ${PUBLIC_WS_URL:-ws://localhost:3001/api/v1/ws/events}
+
+  redis:
+    restart: unless-stopped
+
+  postgres:
+    restart: unless-stopped
+
+  rabbitmq:
+    restart: unless-stopped
