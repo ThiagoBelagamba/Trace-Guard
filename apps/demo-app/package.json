@@ -1,0 +1,20 @@
+{
+  "name": "@traceguard/demo-app",
+  "version": "0.1.0",
+  "private": true,
+  "description": "App de demonstração da PoC TraceGuard",
+  "scripts": {
+    "build": "tsc",
+    "dev": "tsx src/index.ts",
+    "dev:stress": "tsx src/index.ts --stress-errors",
+    "start": "node dist/index.js"
+  },
+  "dependencies": {
+    "@traceguard/sdk": "workspace:*"
+  },
+  "devDependencies": {
+    "@types/node": "^22.15.21",
+    "tsx": "^4.19.4",
+    "typescript": "^5.8.3"
+  }
+}
