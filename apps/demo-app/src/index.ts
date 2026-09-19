@@ -69,6 +69,7 @@ async function main(): Promise<void> {
   init({
     serviceName: SERVICE_NAME,
     endpoint: ENDPOINT,
+    apiKey: process.env.TRACEGUARD_API_KEY,
     flushIntervalMs: 2000,
   });
 

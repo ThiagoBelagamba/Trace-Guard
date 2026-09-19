@@ -4,6 +4,7 @@ export interface RaspExporterConfig {
   endpoint: string;
   flushIntervalMs?: number;
   maxBatchSize?: number;
+  apiKey?: string;
 }
 
 /**
@@ -15,11 +16,13 @@ export class RaspExporter {
   private readonly endpoint: string;
   private readonly flushIntervalMs: number;
   private readonly maxBatchSize: number;
+  private readonly apiKey?: string;
 
   constructor(config: RaspExporterConfig) {
     this.endpoint = config.endpoint;
     this.flushIntervalMs = config.flushIntervalMs ?? 3000;
     this.maxBatchSize = config.maxBatchSize ?? 50;
+    this.apiKey = config.apiKey;
   }
 
   start(): void {
@@ -42,7 +45,10 @@ export class RaspExporter {
     try {
       const response = await fetch(this.endpoint, {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: {
+          "Content-Type": "application/json",
+          ...(this.apiKey ? { "x-api-key": this.apiKey } : {}),
+        },
         body: JSON.stringify(batch),
       });
       if (!response.ok) {

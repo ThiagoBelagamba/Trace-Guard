@@ -1,0 +1,352 @@
+%% TraceGuard --- monografia em ABNT (abntex2)
+%% Compile: pdflatex main && biber main && pdflatex main && pdflatex main
+%% Overleaf: compiler pdfLaTeX, biber ligado.
+%% Preencha os campos INSTITUIÇÃO / CURSO / ORIENTADOR abaixo.
+
+\documentclass[
+  12pt,
+  oneside,
+  a4paper,
+  english,
+  brazil,
+  sumario=tradicional
+]{abntex2}
+
+\usepackage[utf8]{inputenc}
+\usepackage[T1]{fontenc}
+\usepackage{lmodern}
+\usepackage{indentfirst}
+\usepackage{microtype}
+\usepackage{graphicx}
+\usepackage{booktabs}
+\usepackage{array}
+\usepackage{tabularx}
+\usepackage{longtable}
+\usepackage{multirow}
+\usepackage{csquotes}
+\usepackage{hyperref}
+\usepackage{listings}
+\usepackage{xcolor}
+\usepackage[alf,abnt-emphasize=bf]{abntex2cite}
+
+\hypersetup{
+  colorlinks=true,
+  linkcolor=black,
+  citecolor=black,
+  urlcolor=black
+}
+
+\lstset{
+  basicstyle=\ttfamily\footnotesize,
+  breaklines=true,
+  frame=single,
+  columns=fullflexible,
+  keepspaces=true
+}
+
+% --- Identificação (ajuste à sua instituição) ---
+\titulo{TraceGuard: plataforma \textit{self-hosted} de observabilidade, alertas e proteção em runtime}
+\autor{Thiago Belagamba}
+\local{Brasil}
+\data{2026}
+\orientador{Nome do Orientador}
+\instituicao{%
+  Nome da Instituição
+  \par
+  Curso de Ciência da Computação
+}
+\tipotrabalho{Trabalho de Conclusão de Curso}
+\preambulo{Trabalho de Conclusão de Curso apresentado ao Curso de Ciência da Computação como requisito parcial para obtenção do título de Bacharel.}
+
+\begin{document}
+
+\selectlanguage{brazil}
+\frenchspacing
+
+%==============================================================================
+\imprimircapa
+\imprimirfolhaderosto*
+
+\begin{resumo}
+Sistemas de \textit{Application Performance Monitoring} (APM) comerciais são caros para pequenas e médias empresas, enquanto stacks \textit{open source} fragmentam traces, logs, \textit{uptime} e segurança em produtos distintos. Este trabalho apresenta o TraceGuard, plataforma \textit{self-hosted} que une telemetria de aplicação, mitigação de fadiga de alertas, monitoramento de \textit{uptime} e um módulo de \textit{Runtime Application Self-Protection} (RASP) no mesmo agente Node.js. O recorte científico é a correlação: o mesmo \texttt{traceId} --- propagado por \texttt{AsyncLocalStorage} e pelo padrão W3C Trace Context --- liga latência, bloqueio de \textit{scraper} e alerta acionável. Foram realizados três experimentos reproduzíveis: supressão de alertas por \textit{cooldown}, precisão e \textit{recall} do RASP em \textit{dataset} rotulado e \textit{overhead} de ingestão. O motor de alertas não cria uma notificação por \textit{log}: agrega a janela e suprime rajadas em \textit{cooldown} (50\% de supressão na execução de referência). O código inclui testes automatizados, integração contínua e \textit{dashboard} com \textit{drill-down} por \textit{trace}.
+
+\vspace{\onelineskip}
+\noindent
+\textbf{Palavras-chave}: observabilidade. OpenTelemetry. RASP. fadiga de alertas. APM. \textit{self-hosted}.
+\end{resumo}
+
+\begin{resumo}[Abstract]
+ \begin{otherlanguage*}{english}
+Commercial Application Performance Monitoring (APM) platforms are expensive for small and medium-sized businesses, while open-source stacks split traces, logs, uptime and security across separate products. This work presents TraceGuard, a self-hosted platform that unifies application telemetry, alert-fatigue mitigation, uptime monitoring and a Runtime Application Self-Protection (RASP) module in the same Node.js agent. The scientific cut is correlation: a single \texttt{traceId} --- propagated through AsyncLocalStorage and the W3C Trace Context standard --- links latency, scraper blocking and an actionable alert. Three reproducible experiments were conducted: cooldown-based alert suppression, RASP precision/recall on a labeled dataset, and ingestion overhead. The alert engine does not emit one notification per log line: it aggregates a sliding window and suppresses bursts under cooldown (50\% suppression in the reference run). The artifact includes automated tests, CI and a dashboard with per-trace drill-down.
+
+\vspace{\onelineskip}
+\noindent
+\textbf{Keywords}: observability. OpenTelemetry. RASP. alert fatigue. APM. self-hosted.
+ \end{otherlanguage*}
+\end{resumo}
+
+\begin{siglas}
+  \item[APM] Application Performance Monitoring
+  \item[CNCF] Cloud Native Computing Foundation
+  \item[DSR] Design Science Research
+  \item[F1] Média harmônica de precisão e \textit{recall}
+  \item[OTel] OpenTelemetry
+  \item[OTLP] OpenTelemetry Protocol
+  \item[PME] Pequena e Média Empresa
+  \item[RASP] Runtime Application Self-Protection
+  \item[SRE] Site Reliability Engineering
+  \item[WAF] Web Application Firewall
+\end{siglas}
+
+\tableofcontents*
+\listoftables*
+
+%==============================================================================
+\chapter{Introdução}
+
+\section{Contextualização}
+
+Observabilidade é a capacidade de inferir o estado interno de um sistema a partir de saídas externas --- classicamente \textit{logs}, métricas e \textit{traces} \cite{cncf2023observability}. No mercado, plataformas SaaS (Datadog, New Relic, Dynatrace) cobram por \textit{host}, gigabyte ou \textit{span}. Para uma PME que precisa manter dados em infraestrutura própria, a alternativa típica é montar Jaeger, Prometheus, Grafana, Uptime Kuma e um WAF. Cada peça resolve um recorte; nenhuma entrega, no mesmo identificador, a história ``esta requisição foi lenta, bloqueada como \textit{bot} e gerou um alerta''.
+
+\section{Problema de pesquisa}
+
+Como reduzir o ruído de alertas e correlacionar telemetria de desempenho com eventos de proteção em \textit{runtime}, em uma plataforma \textit{self-hosted} adequada a PMEs, sem exigir um coletor OpenTelemetry completo?
+
+\section{Objetivos}
+
+\textbf{Objetivo geral:} projetar e avaliar uma plataforma unificada de observabilidade e proteção em \textit{runtime} para aplicações Node.js.
+
+\textbf{Objetivos específicos:}
+
+\begin{enumerate}
+  \item Instrumentar \textit{traces} com \texttt{AsyncLocalStorage} e cabeçalho W3C \texttt{traceparent}.
+  \item Persistir telemetria de forma assíncrona (HTTP $\rightarrow$ RabbitMQ $\rightarrow$ PostgreSQL) e exibi-la em tempo real.
+  \item Mitigar fadiga de alertas com regras, janela deslizante e \textit{cooldown}, medindo taxa de supressão.
+  \item Detectar e, opcionalmente, bloquear \textit{scrapers} no próprio processo da aplicação (RASP), correlacionando o evento ao \texttt{traceId}.
+  \item Avaliar o artefato com experimentos reproduzíveis de fadiga, classificação RASP e \textit{overhead}.
+\end{enumerate}
+
+\section{Justificativa}
+
+A literatura de SRE trata fadiga de alertas como risco operacional: o excesso de notificações leva o operador a ignorá-las \cite{beyer2016sre}. RASP comercial opera dentro do processo e vê o que um WAF na borda não vê \cite{impervaRasp}. Unir os dois recortes em um agente leve é relevante para PMEs e é demonstrável em banca: um clique no \textit{dashboard} mostra APM e bloqueio no mesmo identificador.
+
+\section{Delimitação}
+
+O trabalho não substitui um \textit{backend} OpenTelemetry (SigNoz, Jaeger, Grafana Tempo). Não implementa \textit{multi-tenant}, operador Kubernetes nem inspeção de SQL no \textit{driver}. O RASP desta prova de conceito é de borda comportamental (taxa, \textit{User-Agent}, varredura, cabeçalhos), não um motor contra o OWASP Top~10 completo.
+
+%==============================================================================
+\chapter{Fundamentação teórica}
+
+\section{Observabilidade e \textit{tracing} distribuído}
+
+Um \textit{trace} agrupa \textit{spans} de uma requisição através de serviços. O padrão W3C Trace Context define o cabeçalho \texttt{traceparent} no formato \texttt{00-\{trace-id\}-\{parent-id\}-\{flags\}} \cite{w3c2021tracecontext}. O OpenTelemetry tornou-se o padrão de fato de instrumentação: os SDKs emitem OTLP e o \textit{backend} é plugável \cite{opentelemetry2026,jaeger2026,signoz2026}.
+
+O Node.js oferece \texttt{AsyncLocalStorage} sobre \texttt{async\_hooks}, a mesma família de APIs usada pelo SDK JavaScript do OpenTelemetry para propagar contexto sem passar o objeto manualmente em cada \textit{callback} \cite{nodejsAls}.
+
+\section{Fadiga de alertas}
+
+Alertar cada evento \texttt{level=error} produz $N$ notificações para $N$ \textit{logs}. Práticas de SRE recomendam alertar sintomas (taxa de erro, SLO) com \textit{cooldown}, agrupamento e severidade \cite{beyer2016sre}. A métrica deste trabalho é a \textbf{taxa de supressão}: fração de disparos persistidos com \texttt{suppressed=true} após o \textit{cooldown}.
+
+\section{RASP versus WAF}
+
+WAF inspeciona o tráfego HTTP na borda. RASP executa no processo da aplicação e pode bloquear com contexto de \textit{runtime} \cite{impervaRasp}. Avaliações acadêmicas de ferramentas de proteção usam matriz de confusão --- precisão, \textit{recall}, F1 e índice de Youden ($\mathrm{TPR}-\mathrm{FPR}$), no espírito do OWASP Benchmark \cite{owaspBenchmark}. Este TCC aplica essas métricas a um \textit{dataset} rotulado de \textit{scraping}, não ao Benchmark Java completo --- limitação declarada.
+
+\section{Arquitetura de ingestão}
+
+Filas (RabbitMQ) desacoplam o aceite HTTP (\texttt{202 Accepted}) da persistência. \textit{Views} materializadas aceleram agregações. WebSocket reduz a latência do \textit{dashboard} em relação a \textit{polling}. Redis pub/sub sincroniza múltiplas réplicas do \textit{hub} em tempo real.
+
+%==============================================================================
+\chapter{Trabalhos relacionados}
+
+O Quadro~\ref{tab:relacionados} posiciona o TraceGuard diante de sistemas estabelecidos. O recorte não é ``substituir o SigNoz''; é unificar APM, RASP e alerta no mesmo \texttt{traceId}, com \textit{deploy} \textit{self-hosted} leve.
+
+\begin{table}[htbp]
+\caption{Sistemas relacionados e lacunas no recorte deste trabalho}
+\label{tab:relacionados}
+\centering
+\small
+\begin{tabular}{@{}p{3.4cm}p{5.2cm}p{5.6cm}@{}}
+\toprule
+\textbf{Sistema} & \textbf{O que cobre} & \textbf{Lacuna no recorte TraceGuard} \\
+\midrule
+SigNoz & APM nativo de OTel, \textit{logs}, métricas, \textit{self-hosted} & Sem RASP no agente; stack ClickHouse mais pesada \\
+Jaeger & \textit{Tracing} CNCF & Sem \textit{logs}, alertas de negócio, \textit{uptime} ou RASP \\
+Grafana LGTM & \textit{Logs}, métricas, \textit{traces} & Três \textit{backends}; sem proteção \textit{in-process} \\
+Sentry & Erros, performance, \textit{releases} & RASP e \textit{uptime} não são o núcleo \\
+Uptime Kuma & \textit{Probes} HTTP & Sem APM nem correlação com \textit{traces} \\
+ModSecurity / CrowdSec & WAF / reputação de IP & Fora do processo; sem \texttt{traceId} da aplicação \\
+Datadog / New Relic & Plataforma completa, SaaS & Custo e residência de dados \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+O TraceGuard compete no recorte ``um \texttt{docker compose}, um SDK, um \textit{dashboard}, correlação APM+RASP+alerta'' \cite{signoz2026,jaeger2026}.
+
+%==============================================================================
+\chapter{Metodologia}
+
+Adota-se \textit{Design Science Research} \cite{peffers2007dsr}: identificar o problema, projetar o artefato, demonstrar, avaliar e comunicar.
+
+\begin{enumerate}
+  \item \textbf{Artefato:} monorepo TypeScript (\texttt{@traceguard/sdk}, \textit{backend} Fastify, \textit{dashboard} Next.js).
+  \item \textbf{Decisões:} registradas em ADRs no diretório \texttt{docs/adr/} do repositório.
+  \item \textbf{Avaliação:} três experimentos controlados (Capítulo~\ref{cap:experimentos}), testes unitários (\texttt{pnpm test}) e demonstração no \textit{dashboard}.
+  \item \textbf{Reprodutibilidade:} scripts em \texttt{scripts/experiments/} e carga k6 em \texttt{scripts/load-test/}.
+\end{enumerate}
+
+Não houve estudo com usuários reais de PME; a validade é de laboratório. Isso é uma limitação, não um defeito oculto.
+
+%==============================================================================
+\chapter{O artefato}
+
+\section{Arquitetura}
+
+A Figura conceitual do fluxo é a seguinte: a aplicação monitorada carrega o SDK; o SDK envia lotes a \texttt{POST /api/v1/ingest}; o Fastify publica no RabbitMQ e responde \texttt{202}; o \textit{consumer} persiste no PostgreSQL e dispara o EventHub (WebSocket). O \textit{middleware} RASP envia eventos a \texttt{/api/v1/ingest/rasp} com o mesmo \texttt{traceId}. \textit{Probes} de \textit{uptime} no \textit{backend} alimentam alertas e \textit{webhook}.
+
+\begin{lstlisting}[caption={Fluxo de ingestao e correlacao},label={lst:fluxo}]
+Aplicacao + SDK  --POST /api/v1/ingest-->  Fastify  --> RabbitMQ
+                                         API key opc.         |
+                                         WebSocket            v
+Dashboard Next.js <---- EventHub ---- consumer --> PostgreSQL
+RASP middleware  --POST /ingest/rasp--> Fastify (mesmo traceId)
+Uptime probes    ---------------------> alertas + webhook
+\end{lstlisting}
+
+\section{SDK}
+
+O agente usa \texttt{AsyncLocalStorage} para identificar o \textit{trace} e o \textit{span} \cite{nodejsAls}. A função \texttt{continueOrCreateContext} lê o cabeçalho W3C \texttt{traceparent} ou os cabeçalhos legados \texttt{X-Trace-Id} \cite{w3c2021tracecontext}. Requisições HTTP de saída geram um \textit{span} filho e reinserem \texttt{traceparent}.
+
+O RASP soma pontuações: \texttt{bot\_user\_agent} 50, \texttt{missing\_headers} 20, \texttt{rate\_limit} 40, \texttt{sequential\_scan} 60. O bloqueio ocorre se a soma for maior ou igual a 70 no modo \texttt{block}. Há \textit{whitelist} de \textit{crawlers} (Googlebot, Bingbot e equivalentes), porque o padrão \texttt{bot} no \textit{User-Agent} pegaria o Googlebot.
+
+\section{Alertas}
+
+Tipos implementados: \texttt{error\_rate}, \texttt{error\_count}, \texttt{error\_burst}, \texttt{rasp\_threat\_count} e \texttt{uptime\_down}. O \textit{cooldown} é por par \texttt{ruleId:service}. A API expõe \texttt{suppressionRate} em $0$--$100$.
+
+\section{Segurança da API}
+
+A variável \texttt{API\_KEY} é opcional. Sem chave (desenvolvimento), a API permanece aberta. Com chave, ingestão, leitura e WebSocket exigem \texttt{x-api-key} ou \texttt{?token=}. O \textit{dashboard} envia \texttt{NEXT\_PUBLIC\_API\_KEY} e pode exigir senha (\texttt{NEXT\_PUBLIC\_DASHBOARD\_PASSWORD}).
+
+%==============================================================================
+\chapter{Experimentos e resultados}
+\label{cap:experimentos}
+
+Os experimentos foram executados em 19 de setembro de 2026, em máquina local, com \textit{backend}, PostgreSQL e RabbitMQ. Os protocolos estão em \texttt{scripts/experiments/}. Recomenda-se registrar CPU, memória e sistema operacional na versão impressa.
+
+\section{Fadiga de alertas}
+
+\textbf{Hipótese:} uma rajada de erros não gera uma notificação por evento; uma segunda rajada em \textit{cooldown} é suprimida.
+
+A linha de base ingênua considera 150 notificações (um alerta por evento de erro). O Quadro~\ref{tab:fadiga} mostra a execução de referência (\texttt{pnpm experiment:fatigue}).
+
+\begin{table}[htbp]
+\caption{Experimento 1 --- fadiga de alertas}
+\label{tab:fadiga}
+\centering
+\begin{tabular}{@{}lrrr@{}}
+\toprule
+\textbf{Etapa} & \textbf{Acionáveis} & \textbf{Suprimidos} & \textbf{Taxa} \\
+\midrule
+Antes & 0 & 0 & 0\% \\
+Após 100 erros & 3 & 0 & 0\% \\
+Após +50 erros (\textit{cooldown}) & 3 & 3 & 50\% \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+O motor agrega a janela. A primeira rajada dispara as três regras padrão (\texttt{error\_rate}, \texttt{error\_count}, \texttt{error\_burst}). A segunda, ainda em \textit{cooldown}, é persistida como suprimida. Delta da execução: 3 acionáveis e 3 suprimidos (50\%). O sistema nunca cria um alerta por linha de \textit{log}.
+
+\section{Classificação RASP}
+
+\textbf{Hipótese:} \textit{scrapers} com \textit{User-Agent} conhecido em rotas \texttt{/api/*} são bloqueados; \textit{browser}, \textit{healthcheck} e Googlebot não.
+
+O \textit{script} \texttt{pnpm experiment:rasp} usa \texttt{http.request} (não o \texttt{fetch} do Node.js), porque o \texttt{fetch} injeta \texttt{Accept-Language: *} e o \textit{scraper} deixaria de somar \texttt{missing\_headers} (pontuação $50 < 70$). O \textit{rate limiter} foi zerado (API recém-iniciada). Os Quadros~\ref{tab:rasp-casos} e~\ref{tab:rasp-metricas} resumem o resultado oficial do autor.
+
+\begin{table}[htbp]
+\caption{Experimento 2 --- casos rotulados do RASP}
+\label{tab:rasp-casos}
+\centering
+\begin{tabular}{@{}lll@{}}
+\toprule
+\textbf{Caso} & \textbf{Esperado} & \textbf{Detectado} \\
+\midrule
+\texttt{browser\_legitimo} & legítimo & permitido \\
+\texttt{healthcheck\_curl} & legítimo & permitido \\
+\texttt{scraper\_python} & ameaça & bloqueado \\
+\texttt{scraper\_scrapy} & ameaça & bloqueado \\
+\texttt{crawler\_googlebot} & legítimo & permitido \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\begin{table}[htbp]
+\caption{Experimento 2 --- métricas de classificação}
+\label{tab:rasp-metricas}
+\centering
+\begin{tabular}{@{}lr@{}}
+\toprule
+\textbf{Métrica} & \textbf{Valor} \\
+\midrule
+Verdadeiros positivos (TP) & 2 \\
+Falsos positivos (FP) & 0 \\
+Falsos negativos (FN) & 0 \\
+Verdadeiros negativos (TN) & 3 \\
+Precisão & 1,000 \\
+\textit{Recall} & 1,000 \\
+F1 & 1,000 \\
+Youden & 1,000 \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+O \textit{dataset} é pequeno e controlado: adequado a laboratório, insuficiente para afirmar ``RASP 100\% em produção''.
+
+\section{\textit{Overhead}}
+
+\textbf{Hipótese:} o percentil 95 da ingestão fica abaixo de 500~ms em desenvolvimento, alinhado ao limiar do k6.
+
+O comando \texttt{pnpm experiment:overhead} coletou 80 amostras (Quadro~\ref{tab:overhead}).
+
+\begin{table}[htbp]
+\caption{Experimento 3 --- latência (80 amostras)}
+\label{tab:overhead}
+\centering
+\begin{tabular}{@{}lrrr@{}}
+\toprule
+\textbf{Alvo} & \textbf{Média (ms)} & \textbf{p50 (ms)} & \textbf{p95 (ms)} \\
+\midrule
+\texttt{GET /health} (RASP analisa) & 1,6 & 1,5 & 2,1 \\
+\texttt{POST /api/v1/ingest} & 2,0 & 1,8 & 3,2 \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+O p95 da ingestão (3,2~ms) está muito abaixo do alvo de 500~ms.
+
+%==============================================================================
+\chapter{Discussão}
+
+O diferencial não é ``mais um \textit{dashboard}''. É a correlação demonstrável e a métrica de fadiga. Chamar o módulo de RASP exige honestidade: trata-se de proteção contra \textit{scraping}, não de substituto de WAF contra injeção. As heurísticas em \texttt{fingerprints.ts} são simples --- o texto admite isso e publica FP/FN em vez de invocar aprendizado de máquina.
+
+O monitor de \textit{event loop} usa \texttt{monitorEventLoopDelay} (não eventos de \textit{garbage collection}). \textit{Spans} filhos existem nas saídas HTTP. Testes automatizados cobrem o núcleo que a arguição pode abrir no projetor.
+
+%==============================================================================
+\chapter{Limitações e trabalhos futuros}
+
+\begin{itemize}
+  \item O RASP do SDK atende apenas Express; Fastify fica como trabalho futuro.
+  \item \textit{Cooldown} e EventHub sem Redis perdem estado no reinício ou entre réplicas (Redis é opcional).
+  \item Não há exportador OTLP: há acoplamento ao \textit{backend} TraceGuard.
+  \item Não houve estudo de campo com operadores de PME.
+  \item Autenticação do \textit{dashboard} com variáveis \texttt{NEXT\_PUBLIC\_*} expõe a chave no navegador --- aceitável na prova de conceito, insuficiente para produção.
+\end{itemize}
+
+Como trabalhos futuros propõem-se exportador OTLP, retenção com TTL, \textit{dead-letter} no RabbitMQ, \textit{adapter} Fastify e \textit{dataset} RASP maior.
+
+%==============================================================================
+\chapter{Conclusão}
+
+O TraceGuard responde à pergunta de pesquisa com um artefato executável: agente Node.js, \textit{pipeline} assíncrono, \textit{dashboard} em tempo real, motor de fadiga e RASP correlacionado. Os experimentos mostram que o sistema não alerta um-para-um e que as heurísticas de \textit{scraping} são mensuráveis. O trabalho é de engenharia de software com avaliação empírica de laboratório --- adequado a TCC, desde que o texto e a demonstração de oito minutos sejam o centro da defesa, não a quantidade de abas da interface.
+
+\bibliography{referencias}
+
+\end{document}

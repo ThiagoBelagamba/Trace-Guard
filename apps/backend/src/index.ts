@@ -14,6 +14,7 @@ import {
   closeRabbitMQ,
 } from "./publishers/rabbitmq.js";
 import { eventHub } from "./realtime/event-hub.js";
+import { authorizeApiRequest, extractProvidedKey } from "./auth/authorize.js";
 
 const PORT = parseInt(process.env.PORT ?? "3001", 10);
 
@@ -49,9 +50,28 @@ async function main(): Promise<void> {
   await app.register(cors, {
     origin: process.env.CORS_ORIGIN ?? true,
     methods: ["GET", "HEAD", "POST", "PATCH", "DELETE", "OPTIONS"],
+    allowedHeaders: ["Content-Type", "Authorization", "x-api-key"],
   });
 
   await app.register(websocket);
+
+  app.addHook("onRequest", async (request, reply) => {
+    if (request.method === "OPTIONS") return;
+
+    const query = request.query as { token?: string };
+    const decision = authorizeApiRequest({
+      path: request.url,
+      apiKey: process.env.API_KEY,
+      providedKey: extractProvidedKey(
+        request.headers as Record<string, string | string[] | undefined>
+      ),
+      wsToken: query.token,
+    });
+
+    if (decision === "unauthorized") {
+      return reply.status(401).send({ error: "Não autorizado" });
+    }
+  });
 
   await registerRoutes(app);
   await registerRaspRoutes(app);

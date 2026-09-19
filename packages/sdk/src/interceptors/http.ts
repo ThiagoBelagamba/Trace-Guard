@@ -1,7 +1,8 @@
 import http from "node:http";
 import https from "node:https";
 import type { LogEvent, LogLevel } from "@traceguard/shared";
-import { getContext } from "../core/context.js";
+import { createChildContext, getContext } from "../core/context.js";
+import { outgoingTraceHeaders } from "../core/traceparent.js";
 import { now } from "../core/perf.js";
 import type { HttpExporter } from "../exporters/http-exporter.js";
 
@@ -16,11 +17,11 @@ function emitLog(
   level: LogLevel,
   message: string,
   metadata?: Record<string, unknown>,
-  durationMs?: number
+  durationMs?: number,
+  ctx = getContext()
 ): void {
   if (!exporter) return;
 
-  const ctx = getContext();
   const event: LogEvent = {
     traceId: ctx?.traceId ?? "no-trace",
     spanId: ctx?.spanId ?? "no-span",
@@ -45,27 +46,28 @@ function normalizeOptions(options: RequestOptions): http.RequestOptions {
   return { ...options, headers: { ...options.headers } };
 }
 
-function injectTraceHeaders(options: http.RequestOptions): http.RequestOptions {
-  const ctx = getContext();
+function injectTraceHeaders(
+  options: http.RequestOptions,
+  ctx = getContext()
+): http.RequestOptions {
   if (!ctx?.traceId) return options;
 
-  // URL não suporta spread nem headers diretamente — converte para RequestOptions
+  const traceHeaders = outgoingTraceHeaders(ctx);
+
   if (options instanceof URL) {
     return {
       protocol: options.protocol,
       hostname: options.hostname,
       port: options.port ? Number(options.port) : undefined,
       path: `${options.pathname}${options.search}`,
-      headers: {
-        "X-Trace-Id": ctx.traceId,
-        "X-Span-Id": ctx.spanId,
-      },
+      headers: traceHeaders,
     };
   }
 
-  const headers = { ...(options.headers as Record<string, string>) };
-  headers["X-Trace-Id"] = ctx.traceId;
-  headers["X-Span-Id"] = ctx.spanId;
+  const headers = {
+    ...(options.headers as Record<string, string>),
+    ...traceHeaders,
+  };
 
   return { ...options, headers };
 }
@@ -85,10 +87,11 @@ function createPatchedRequest(
     options: RequestOptions,
     callback?: RequestCallback
   ): http.ClientRequest {
-    const normalized = injectTraceHeaders(normalizeOptions(options));
+    const parent = getContext();
+    const spanCtx = parent ? createChildContext(parent) : undefined;
+    const normalized = injectTraceHeaders(normalizeOptions(options), spanCtx);
     const url = describeUrl(normalized);
     const start = now();
-    const ctx = getContext();
 
     const req = originalRequest(normalized, callback);
 
@@ -96,8 +99,13 @@ function createPatchedRequest(
       emitLog(
         "info",
         `HTTP ${req.method ?? "GET"} ${url}`,
-        { statusCode: res.statusCode, traceId: ctx?.traceId },
-        now() - start
+        {
+          statusCode: res.statusCode,
+          traceId: spanCtx?.traceId ?? parent?.traceId,
+          parentSpanId: spanCtx?.parentSpanId,
+        },
+        now() - start,
+        spanCtx ?? parent
       );
     });
 
@@ -105,8 +113,13 @@ function createPatchedRequest(
       emitLog(
         "error",
         `HTTP ${req.method ?? "GET"} ${url} failed`,
-        { error: err.message, traceId: ctx?.traceId },
-        now() - start
+        {
+          error: err.message,
+          traceId: spanCtx?.traceId ?? parent?.traceId,
+          parentSpanId: spanCtx?.parentSpanId,
+        },
+        now() - start,
+        spanCtx ?? parent
       );
     });
 

@@ -90,6 +90,25 @@ Lista eventos recentes do PostgreSQL.
 
 ---
 
+## GET /api/v1/traces/:traceId
+
+Detalhe de um trace para drill-down no dashboard. Correlaciona eventos APM e RASP pelo mesmo `traceId`.
+
+**Resposta 200:**
+```json
+{
+  "traceId": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+  "events": [],
+  "raspEvents": [],
+  "spanCount": 2,
+  "durationMs": 48
+}
+```
+
+**Resposta 404:** `{ "error": "Trace não encontrado" }`
+
+---
+
 ## GET /api/v1/events/stats
 
 Agregações para gráficos do dashboard.

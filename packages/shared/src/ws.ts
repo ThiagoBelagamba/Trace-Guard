@@ -24,6 +24,15 @@ export type WsMessage =
   | { type: "connected"; clientId: string }
   | { type: "ping" };
 
+/** Detalhe de um trace para drill-down no dashboard (APM + RASP). */
+export interface TraceDetail {
+  traceId: string;
+  events: DashboardEvent[];
+  raspEvents: RaspEvent[];
+  spanCount: number;
+  durationMs: number | null;
+}
+
 export interface EventStats {
   timeline: Array<{ bucket: string; count: number }>;
   byLevel: Record<string, number>;

@@ -4,7 +4,7 @@
  * Decisão técnica: estado em memória é suficiente para PoC single-node;
  * reinício do backend zera o cooldown (documentado no ADR 004).
  */
-class CooldownRegistry {
+export class CooldownRegistry {
   private lastFired = new Map<string, number>();
 
   private key(ruleId: string, service: string): string {

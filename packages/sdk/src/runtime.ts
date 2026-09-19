@@ -17,14 +17,15 @@ let raspRuntime: RaspRuntime | null = null;
 export function initRaspRuntime(
   serviceName: string,
   raspEndpoint: string,
-  config?: Partial<RaspConfig>
+  config?: Partial<RaspConfig>,
+  apiKey?: string
 ): RaspRuntime {
   const merged: RaspConfig = { ...DEFAULT_RASP_CONFIG, ...config };
   const rateLimiter = createRateLimiter(merged.redisUrl);
   const redisLimiter =
     rateLimiter instanceof RedisRateLimiter ? rateLimiter : null;
   const detector = new RaspDetector(merged, rateLimiter);
-  const exporter = new RaspExporter({ endpoint: raspEndpoint });
+  const exporter = new RaspExporter({ endpoint: raspEndpoint, apiKey });
   exporter.start();
 
   raspRuntime = {

@@ -25,6 +25,7 @@ export interface TraceGuardConfig {
   endpoint: string;
   flushIntervalMs?: number;
   maxBatchSize?: number;
+  apiKey?: string;
   rasp?: Partial<RaspConfig>;
   raspEndpoint?: string;
 }
@@ -47,6 +48,7 @@ export function init(config: TraceGuardConfig): void {
     endpoint: config.endpoint,
     flushIntervalMs: config.flushIntervalMs,
     maxBatchSize: config.maxBatchSize,
+    apiKey: config.apiKey,
   });
 
   exporter.start();
@@ -60,7 +62,7 @@ export function init(config: TraceGuardConfig): void {
     const base = config.endpoint.replace(/\/$/, "");
     const raspEndpoint =
       config.raspEndpoint ?? `${base}/rasp`;
-    initRaspRuntime(config.serviceName, raspEndpoint, raspCfg);
+    initRaspRuntime(config.serviceName, raspEndpoint, raspCfg, config.apiKey);
   }
 
   initialized = true;
@@ -114,4 +116,9 @@ export async function withTraceAsync<T>(fn: () => Promise<T>): Promise<T> {
   return runWithContext(ctx, fn);
 }
 
-export { getContext, createRootContext };
+export { getContext, createRootContext, createChildContext } from "./core/context.js";
+export {
+  formatTraceparent,
+  parseTraceparent,
+  continueOrCreateContext,
+} from "./core/traceparent.js";

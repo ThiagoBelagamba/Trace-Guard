@@ -4,6 +4,7 @@ export interface ExporterConfig {
   endpoint: string;
   flushIntervalMs?: number;
   maxBatchSize?: number;
+  apiKey?: string;
 }
 
 /**
@@ -17,11 +18,13 @@ export class HttpExporter {
   private readonly endpoint: string;
   private readonly flushIntervalMs: number;
   private readonly maxBatchSize: number;
+  private readonly apiKey?: string;
 
   constructor(config: ExporterConfig) {
     this.endpoint = config.endpoint;
     this.flushIntervalMs = config.flushIntervalMs ?? 5000;
     this.maxBatchSize = config.maxBatchSize ?? 100;
+    this.apiKey = config.apiKey;
   }
 
   start(): void {
@@ -51,7 +54,10 @@ export class HttpExporter {
     try {
       const response = await fetch(this.endpoint, {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: {
+          "Content-Type": "application/json",
+          ...(this.apiKey ? { "x-api-key": this.apiKey } : {}),
+        },
         body: JSON.stringify(batch),
       });
 

@@ -46,7 +46,8 @@ pnpm dev:demo
 
 Abra **http://localhost:3000** — a tabela atualiza via WebSocket quando novos eventos são persistidos.
 
-Documentação acadêmica: [`docs/`](docs/) (ADRs, arquitetura, referência de API).
+Documentação acadêmica: [`docs/`](docs/) (ADRs, arquitetura, API).  
+TCC: [`docs/tcc/monografia.md`](docs/tcc/monografia.md), [`docs/tcc/roteiro-defesa.md`](docs/tcc/roteiro-defesa.md), [`docs/tcc/resultados-experimentos.md`](docs/tcc/resultados-experimentos.md).
 
 ## Fase 3 — Mitigação de fadiga de alertas
 
@@ -140,6 +141,7 @@ Redis (`REDIS_URL`): sincroniza WebSocket entre backends e rate limit RASP entre
 | GET | `/health` | Health check |
 | POST | `/api/v1/ingest` | Ingestão de eventos de telemetria |
 | GET | `/api/v1/events?limit=10` | Listar eventos recentes |
+| GET | `/api/v1/traces/:traceId` | Drill-down APM + RASP do mesmo trace |
 | GET | `/api/v1/events/stats` | Agregações para gráficos |
 | GET | `/api/v1/alerts/stats` | Métricas de alertas |
 | POST | `/api/v1/ingest/rasp` | Ingestão RASP |
@@ -150,6 +152,17 @@ Redis (`REDIS_URL`): sincroniza WebSocket entre backends e rate limit RASP entre
 | WS | `/api/v1/ws/events` | Eventos em tempo real |
 
 Ver [`docs/api-v1.md`](docs/api-v1.md) para referência completa.
+
+## Testes e experimentos (TCC)
+
+```bash
+pnpm test                 # testes unitários do núcleo
+pnpm experiment:fatigue   # Exp. 1 — fadiga de alertas (backend no ar)
+pnpm experiment:rasp      # Exp. 2 — precisão/recall do RASP (demo-api no ar)
+pnpm experiment:overhead  # Exp. 3 — p50/p95 health + ingest
+```
+
+Clique em um **Trace ID** no dashboard para abrir o detalhe correlacionado (APM + RASP).
 
 ## Teste manual de ingestão
 

@@ -86,6 +86,19 @@ export async function insertTelemetryEvents(
   }
 }
 
+export async function listEventsByTraceId(
+  traceId: string
+): Promise<TelemetryRow[]> {
+  const result = await getPool().query<TelemetryRow>(
+    `SELECT id, trace_id, span_id, service, level, message, metadata, duration_ms, created_at
+     FROM telemetry_events
+     WHERE trace_id = $1
+     ORDER BY created_at ASC`,
+    [traceId]
+  );
+  return result.rows;
+}
+
 export async function listRecentEvents(
   limit: number
 ): Promise<TelemetryRow[]> {

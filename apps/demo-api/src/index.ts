@@ -9,6 +9,7 @@ const BACKEND = process.env.TRACEGUARD_ENDPOINT ?? "http://localhost:3001/api/v1
 init({
   serviceName: "demo-api",
   endpoint: BACKEND,
+  apiKey: process.env.TRACEGUARD_API_KEY,
   rasp: {
     enabled: true,
     mode: (process.env.RASP_MODE as "monitor" | "block") ?? "block",

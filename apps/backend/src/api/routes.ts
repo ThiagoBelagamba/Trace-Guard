@@ -8,9 +8,11 @@ import {
   setRuleEnabled,
 } from "../db/alerts.js";
 import { toDashboardEvent } from "../db/mappers.js";
-import { getEventStats, listRecentEvents } from "../db/pool.js";
+import { getEventStats, listEventsByTraceId, listRecentEvents } from "../db/pool.js";
+import { listRaspEventsByTraceId } from "../db/rasp.js";
 import { publishLogEvents } from "../publishers/rabbitmq.js";
 import { eventHub } from "../realtime/event-hub.js";
+import { getTraceDetail } from "../traces/get-trace.js";
 
 export async function registerRoutes(app: FastifyInstance): Promise<void> {
   app.get("/health", async () => {
@@ -53,6 +55,25 @@ export async function registerRoutes(app: FastifyInstance): Promise<void> {
         count: rows.length,
         events: rows.map(toDashboardEvent),
       };
+    }
+  );
+
+  app.get<{ Params: { traceId: string } }>(
+    "/api/v1/traces/:traceId",
+    async (request, reply) => {
+      const detail = await getTraceDetail(request.params.traceId, {
+        listEventsByTraceId: async (traceId) => {
+          const rows = await listEventsByTraceId(traceId);
+          return rows.map(toDashboardEvent);
+        },
+        listRaspByTraceId: (traceId) => listRaspEventsByTraceId(traceId),
+      });
+
+      if (!detail) {
+        return reply.status(404).send({ error: "Trace não encontrado" });
+      }
+
+      return detail;
     }
   );
 

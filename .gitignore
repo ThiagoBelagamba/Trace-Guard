@@ -18,3 +18,24 @@ Thumbs.db
 
 # Docker volumes (local data)
 docker/postgres/data/
+
+# Cache local do pnpm (centenas de MB — nunca versionar)
+.pnpm-store/
+
+# Documento institucional (RGM / capa Unifran) — não versionar
+docs/Modelo Capa do documento.pdf
+
+# LaTeX: só fontes e o PDF final
+docs/tcc/latex/*.aux
+docs/tcc/latex/*.bbl
+docs/tcc/latex/*.blg
+docs/tcc/latex/*.lot
+docs/tcc/latex/*.toc
+docs/tcc/latex/*.out
+docs/tcc/latex/*.synctex.gz
+*.aux
+*.bbl
+*.blg
+*.toc
+*.out
+*.synctex.gz

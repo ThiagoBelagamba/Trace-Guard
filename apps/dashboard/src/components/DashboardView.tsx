@@ -25,6 +25,7 @@ import { EventTable } from "./EventTable";
 import { FiltersBar, type FilterValues } from "./FiltersBar";
 import { RaspPanel } from "./RaspPanel";
 import { RaspStatsCharts } from "./RaspStatsCharts";
+import { TraceDrawer } from "./TraceDrawer";
 import { UptimeMonitorForm } from "./UptimeMonitorForm";
 import { UptimePanel } from "./UptimePanel";
 import { UptimeTimeline } from "./UptimeTimeline";
@@ -69,6 +70,7 @@ export function DashboardView() {
   const [uptimeStats, setUptimeStats] = useState<UptimeStats>(EMPTY_UPTIME_STATS);
   const [loading, setLoading] = useState(true);
   const [tab, setTab] = useState<Tab>("events");
+  const [selectedTraceId, setSelectedTraceId] = useState<string | null>(null);
   const [filters, setFilters] = useState<FilterValues>({
     service: "",
     level: "",
@@ -240,7 +242,7 @@ export function DashboardView() {
               services={services}
             />
             <EventCharts stats={stats} />
-            <EventTable events={filteredEvents} />
+            <EventTable events={filteredEvents} onSelectTrace={setSelectedTraceId} />
           </>
         )}
 
@@ -254,7 +256,7 @@ export function DashboardView() {
         {tab === "security" && (
           <>
             <RaspStatsCharts stats={raspStats} />
-            <RaspPanel events={raspEvents} />
+            <RaspPanel events={raspEvents} onSelectTrace={setSelectedTraceId} />
           </>
         )}
 
@@ -285,6 +287,10 @@ export function DashboardView() {
           </>
         )}
       </main>
+      <TraceDrawer
+        traceId={selectedTraceId}
+        onClose={() => setSelectedTraceId(null)}
+      />
     </div>
   );
 }

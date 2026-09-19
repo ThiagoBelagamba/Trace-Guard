@@ -1,4 +1,8 @@
-import { performance, PerformanceObserver } from "node:perf_hooks";
+import {
+  monitorEventLoopDelay,
+  performance,
+  type IntervalHistogram,
+} from "node:perf_hooks";
 
 /**
  * Utilitários de medição de performance via perf_hooks nativo do Node.js.
@@ -25,34 +29,27 @@ export async function measureDurationAsync<T>(
   return { result, durationMs };
 }
 
-let eventLoopObserver: PerformanceObserver | null = null;
-let lastEventLoopDelayMs = 0;
+let eventLoopHistogram: IntervalHistogram | null = null;
 
 /**
  * Monitora atraso do event loop (indicador de saturação da aplicação).
- * Útil para correlacionar lentidão com traces no dashboard.
+ * Usa monitorEventLoopDelay — histogram em nanossegundos.
  */
 export function startEventLoopMonitoring(): void {
-  if (eventLoopObserver) return;
+  if (eventLoopHistogram) return;
 
-  eventLoopObserver = new PerformanceObserver((list) => {
-    const entries = list.getEntries();
-    const last = entries[entries.length - 1];
-    if (last) {
-      lastEventLoopDelayMs = last.duration;
-    }
-  });
-
-  eventLoopObserver.observe({ entryTypes: ["gc"], buffered: true });
+  eventLoopHistogram = monitorEventLoopDelay({ resolution: 1 });
+  eventLoopHistogram.enable();
 }
 
 export function getLastEventLoopDelayMs(): number {
-  return lastEventLoopDelayMs;
+  if (!eventLoopHistogram) return 0;
+  return eventLoopHistogram.max / 1e6;
 }
 
 export function stopEventLoopMonitoring(): void {
-  if (eventLoopObserver) {
-    eventLoopObserver.disconnect();
-    eventLoopObserver = null;
+  if (eventLoopHistogram) {
+    eventLoopHistogram.disable();
+    eventLoopHistogram = null;
   }
 }

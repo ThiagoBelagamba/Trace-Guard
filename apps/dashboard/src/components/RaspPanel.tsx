@@ -7,6 +7,7 @@ export type RaspEventWithId = RaspEvent & { id?: string };
 
 interface RaspPanelProps {
   events: RaspEventWithId[];
+  onSelectTrace?: (traceId: string) => void;
 }
 
 const THREAT_LABELS: Record<string, string> = {
@@ -22,7 +23,7 @@ function actionClass(action: string): string {
     : "bg-blue-900/40 text-blue-300";
 }
 
-export function RaspPanel({ events }: RaspPanelProps) {
+export function RaspPanel({ events, onSelectTrace }: RaspPanelProps) {
   if (events.length === 0) {
     return (
       <div className="rounded-lg border border-surface-border bg-surface-card p-8 text-center text-gray-500">
@@ -76,7 +77,14 @@ export function RaspPanel({ events }: RaspPanelProps) {
                 {ev.method} {ev.path}
               </td>
               <td className="px-4 py-2 font-mono text-xs text-gray-500">
-                {ev.traceId.slice(0, 8)}…
+                <button
+                  type="button"
+                  title="Abrir detalhe do trace"
+                  onClick={() => onSelectTrace?.(ev.traceId)}
+                  className="hover:text-emerald-400"
+                >
+                  {ev.traceId.slice(0, 8)}…
+                </button>
               </td>
             </tr>
           ))}

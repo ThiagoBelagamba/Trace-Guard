@@ -1,6 +1,7 @@
 import type { RequestHandler } from "express";
-import { createRootContext, getContext, runWithContext } from "../core/context.js";
+import { getContext, runWithContext } from "../core/context.js";
 import { bindContext } from "../core/hooks.js";
+import { continueOrCreateContext } from "../core/traceparent.js";
 import { getRaspRuntime } from "../runtime.js";
 import { getHeader } from "../rasp/fingerprints.js";
 import type { IncomingRequestLike, RaspConfig } from "../rasp/types.js";
@@ -58,7 +59,9 @@ export function raspMiddleware(options?: Partial<RaspConfig>): RequestHandler {
     }
 
     void (async () => {
-      const ctx = createRootContext();
+      const ctx = continueOrCreateContext(
+        req.headers as Record<string, string | string[] | undefined>
+      );
       bindContext(ctx);
       await runWithContext(ctx, async () => {
         const clientIp = extractClientIp(req);

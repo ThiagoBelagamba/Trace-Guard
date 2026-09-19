@@ -70,6 +70,19 @@ export async function insertRaspEvents(
   return inserted;
 }
 
+export async function listRaspEventsByTraceId(
+  traceId: string
+): Promise<Array<RaspEvent & { id: string }>> {
+  const result = await getPool().query<RaspEventRow>(
+    `SELECT id, trace_id, span_id, service, threat_type, action, client_ip, user_agent, path, method, score, metadata, created_at
+     FROM rasp_events
+     WHERE trace_id = $1
+     ORDER BY created_at ASC`,
+    [traceId]
+  );
+  return result.rows.map(toRaspEvent);
+}
+
 export async function listRecentRaspEvents(
   limit: number
 ): Promise<Array<RaspEvent & { id: string }>> {

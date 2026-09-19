@@ -5,9 +5,10 @@ import { formatTime, levelBadgeClass, truncateTraceId } from "../lib/format";
 
 interface EventTableProps {
   events: DashboardEvent[];
+  onSelectTrace?: (traceId: string) => void;
 }
 
-export function EventTable({ events }: EventTableProps) {
+export function EventTable({ events, onSelectTrace }: EventTableProps) {
   if (events.length === 0) {
     return (
       <div className="rounded-lg border border-surface-border bg-surface-card p-8 text-center text-gray-500">
@@ -45,8 +46,8 @@ export function EventTable({ events }: EventTableProps) {
                 <td className="px-4 py-2 font-mono text-xs text-gray-500">
                   <button
                     type="button"
-                    title={event.traceId}
-                    onClick={() => navigator.clipboard.writeText(event.traceId)}
+                    title="Abrir detalhe do trace"
+                    onClick={() => onSelectTrace?.(event.traceId)}
                     className="hover:text-emerald-400"
                   >
                     {truncateTraceId(event.traceId)}

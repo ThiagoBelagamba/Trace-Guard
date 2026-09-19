@@ -21,8 +21,13 @@
     "db:migrate": "docker compose exec -T postgres psql -U traceguard -d traceguard -f /docker-entrypoint-initdb.d/002_alerts_schema.sql && docker compose exec -T postgres psql -U traceguard -d traceguard -f /docker-entrypoint-initdb.d/003_rasp_schema.sql && docker compose exec -T postgres psql -U traceguard -d traceguard -f /docker-entrypoint-initdb.d/004_uptime_schema.sql",
     "db:migrate:uptime": "docker compose exec -T postgres psql -U traceguard -d traceguard -f /docker-entrypoint-initdb.d/004_uptime_schema.sql",
     "docker:up:prod": "docker compose -f docker-compose.yml -f docker-compose.prod.yml up -d --build",
-    "load:test": "docker run --rm -i -v \"%cd%/scripts/load-test:/scripts\" grafana/k6 run -e API_URL=http://host.docker.internal:3001 /scripts/k6-ingest.js",
-    "load:test:rasp": "docker run --rm -i -v \"%cd%/scripts/load-test:/scripts\" grafana/k6 run -e DEMO_API_URL=http://host.docker.internal:4000 /scripts/k6-rasp.js",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "experiment:fatigue": "tsx scripts/experiments/alert-fatigue.ts",
+    "experiment:rasp": "tsx scripts/experiments/rasp-eval.ts",
+    "experiment:overhead": "tsx scripts/experiments/overhead.ts",
+    "load:test": "docker run --rm -i --add-host=host.docker.internal:host-gateway -v \"$(pwd)/scripts/load-test:/scripts\" grafana/k6 run -e API_URL=http://host.docker.internal:3001 /scripts/k6-ingest.js",
+    "load:test:rasp": "docker run --rm -i --add-host=host.docker.internal:host-gateway -v \"$(pwd)/scripts/load-test:/scripts\" grafana/k6 run -e DEMO_API_URL=http://host.docker.internal:4000 /scripts/k6-rasp.js",
     "db:migrate:rasp": "docker compose exec -T postgres psql -U traceguard -d traceguard -f /docker-entrypoint-initdb.d/003_rasp_schema.sql"
   },
   "engines": {
@@ -30,6 +35,8 @@
     "pnpm": ">=9.0.0"
   },
   "devDependencies": {
-    "concurrently": "^9.1.2"
+    "concurrently": "^9.1.2",
+    "tsx": "^4.19.4",
+    "vitest": "3.2.4"
   }
 }
