@@ -1,5 +1,6 @@
 import { RaspDetector } from "./rasp/detector.js";
 import { RaspExporter } from "./rasp/emitter.js";
+import { createLayaGate, type LayaGate } from "./rasp/laya-shadow.js";
 import { createRateLimiter, RedisRateLimiter } from "./rasp/redis-rate-limiter.js";
 import type { RaspConfig } from "./rasp/types.js";
 import { DEFAULT_RASP_CONFIG } from "./rasp/types.js";
@@ -10,6 +11,7 @@ export interface RaspRuntime {
   exporter: RaspExporter;
   config: RaspConfig;
   redisLimiter: RedisRateLimiter | null;
+  layaGate: LayaGate;
 }
 
 let raspRuntime: RaspRuntime | null = null;
@@ -34,6 +36,7 @@ export function initRaspRuntime(
     exporter,
     config: merged,
     redisLimiter,
+    layaGate: createLayaGate(merged.layaMaxInFlight ?? 4),
   };
   return raspRuntime;
 }

@@ -24,6 +24,31 @@ describe("logEventBatchSchema", () => {
 });
 
 describe("raspEventSchema", () => {
+  it("accepts a semantic shadow event whose score is a probability percent", () => {
+    const parsed = raspEventSchema.safeParse({
+      traceId: "a".repeat(32),
+      spanId: "b".repeat(16),
+      service: "demo-api",
+      threatType: "prompt_injection",
+      action: "logged",
+      clientIp: "203.0.113.8",
+      path: "/api/chat",
+      method: "POST",
+      score: 91,
+      metadata: {
+        source: "laya",
+        scoreScale: "noul_percent",
+        signals: {
+          prompt_injection: { noul: 0.91 },
+          secret_leak: { noul: 0.12 },
+        },
+      },
+      timestamp: "2026-01-01T00:00:00.000Z",
+    });
+
+    expect(parsed.success).toBe(true);
+  });
+
   it("rejects a score outside 0–100", () => {
     const parsed = raspEventSchema.safeParse({
       traceId: "a".repeat(32),

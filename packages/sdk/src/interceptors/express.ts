@@ -4,6 +4,7 @@ import { bindContext } from "../core/hooks.js";
 import { continueOrCreateContext } from "../core/traceparent.js";
 import { getRaspRuntime } from "../runtime.js";
 import { getHeader } from "../rasp/fingerprints.js";
+import { scheduleLayaInspection } from "../rasp/laya-shadow.js";
 import type { IncomingRequestLike, RaspConfig } from "../rasp/types.js";
 
 function extractClientIp(req: {
@@ -71,21 +72,44 @@ export function raspMiddleware(options?: Partial<RaspConfig>): RequestHandler {
           clientIp
         );
 
+        const context = getContext();
+        const traceId = context?.traceId ?? "unknown";
+        const spanId = context?.spanId ?? "unknown";
+        const userAgent = getHeader(req.headers, "user-agent");
+        const shouldBlock =
+          threats.length > 0 &&
+          effectiveConfig.mode === "block" &&
+          score >= effectiveConfig.blockThreshold;
+        const layaUrl = effectiveConfig.layaSidecarUrl?.trim();
+
+        if (layaUrl && !shouldBlock) {
+          scheduleLayaInspection({
+            method: req.method,
+            body: req.body,
+            traceId,
+            spanId,
+            service: runtime.serviceName,
+            clientIp,
+            userAgent,
+            path: incoming.path,
+            layaUrl,
+            apiKey: effectiveConfig.layaApiKey,
+            gate: runtime.layaGate,
+            enqueue: (event) => runtime.exporter.enqueue(event),
+            flush: () => runtime.exporter.flush(),
+          });
+        }
+
         if (threats.length === 0) {
           next();
           return;
         }
 
-        const context = getContext();
-        const shouldBlock =
-          effectiveConfig.mode === "block" &&
-          score >= effectiveConfig.blockThreshold;
         const threatType = runtime.detector.primaryThreat(threats);
-        const userAgent = getHeader(req.headers, "user-agent");
 
         const event = {
-          traceId: context?.traceId ?? "unknown",
-          spanId: context?.spanId ?? "unknown",
+          traceId,
+          spanId,
           service: runtime.serviceName,
           threatType,
           action: shouldBlock ? ("blocked" as const) : ("logged" as const),

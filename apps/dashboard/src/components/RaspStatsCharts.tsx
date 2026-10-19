@@ -23,6 +23,8 @@ const THREAT_COLORS: Record<string, string> = {
   bot_user_agent: "#ef4444",
   sequential_scan: "#a855f7",
   missing_headers: "#3b82f6",
+  prompt_injection: "#f97316",
+  secret_leak: "#eab308",
 };
 
 const THREAT_LABELS: Record<string, string> = {
@@ -30,6 +32,8 @@ const THREAT_LABELS: Record<string, string> = {
   bot_user_agent: "Bot UA",
   sequential_scan: "Varredura",
   missing_headers: "Headers",
+  prompt_injection: "Injeção de prompt",
+  secret_leak: "Segredo no payload",
 };
 
 export function RaspStatsCharts({ stats }: RaspStatsChartsProps) {

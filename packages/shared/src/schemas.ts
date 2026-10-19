@@ -26,6 +26,8 @@ export const raspThreatTypeSchema = z.enum([
   "bot_user_agent",
   "sequential_scan",
   "missing_headers",
+  "prompt_injection",
+  "secret_leak",
 ]);
 
 export const raspActionSchema = z.enum(["logged", "blocked"]);

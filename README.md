@@ -97,6 +97,20 @@ No dashboard, aba **Segurança** — eventos RASP em tempo real e gráficos por 
 
 Modo monitor (sem bloqueio): `RASP_MODE=monitor pnpm dev:demo-api`
 
+### Inspeção semântica (sidecar Laya)
+
+O heurístico continua no caminho da resposta. Texto de `POST`/`PUT`/`PATCH` é classificado em background pelo `laya-serve` e, se passar do limiar, entra no mesmo `traceId` como `prompt_injection` ou `secret_leak` (`action: logged`). Sem `LAYA_SIDECAR_URL`, o sombra não roda.
+
+```bash
+docker compose up -d --build laya
+# no .env da demo-api:
+# LAYA_SIDECAR_URL=http://localhost:8000
+# LAYA_API_KEY=traceguard-secret
+pnpm dev:demo-api
+```
+
+`POST /api/chat` com `{ "message": "..." }` é o corpo de texto da demo. A primeira subida baixa o checkpoint `multilingual`.
+
 ## Fase 5 — Uptime, Webhook e Redis
 
 ```bash

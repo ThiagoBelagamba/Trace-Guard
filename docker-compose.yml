@@ -42,6 +42,41 @@ services:
       timeout: 3s
       retries: 5
 
+  # Inspeção semântica fora do caminho quente. Não sobe com `docker compose up`
+  # nem com o stack de produção: o checkpoint é grande.
+  laya:
+    profiles: ["laya"]
+    build:
+      context: ./docker/laya
+      dockerfile: Dockerfile
+    environment:
+      LAYA_HOST: 0.0.0.0
+      LAYA_PORT: "8000"
+      LAYA_DEVICE: ${LAYA_DEVICE:-cpu}
+      LAYA_PRELOAD: "1"
+      LAYA_MODELS: multilingual
+      LAYA_DEFAULT_MODEL: multilingual
+      LAYA_THREADS: ${LAYA_THREADS:-4}
+      LAYA_API_KEY: ${LAYA_API_KEY:-traceguard-secret}
+    ports:
+      - "8000:8000"
+    volumes:
+      # Bind no disco de /home. Um volume nomeado cairia em /var/lib/docker, na partição de 28 GB.
+      - ./.cache/laya:/home/laya/.cache/huggingface
+    healthcheck:
+      test:
+        [
+          "CMD",
+          "python",
+          "-c",
+          "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/health')",
+        ]
+      interval: 30s
+      timeout: 5s
+      retries: 20
+      start_period: 300s
+    restart: unless-stopped
+
   backend:
     build:
       context: .

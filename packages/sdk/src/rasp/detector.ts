@@ -7,12 +7,18 @@ import {
 import type { RateLimiterBackend } from "./rate-limiter-backend.js";
 import type { IncomingRequestLike, RaspAnalysisResult, RaspConfig } from "./types.js";
 
-/** Pesos heurísticos por tipo de ameaça (0–100) */
+/**
+ * Pesos heurísticos por tipo de ameaça (0–100).
+ * prompt_injection e secret_leak valem 0: a probabilidade do Laya vive em
+ * metadata e não entra na soma que o limiar de bloqueio compara.
+ */
 const THREAT_SCORES: Record<RaspThreatType, number> = {
   rate_limit: 40,
   bot_user_agent: 50,
   sequential_scan: 60,
   missing_headers: 20,
+  prompt_injection: 0,
+  secret_leak: 0,
 };
 
 export class RaspDetector {
@@ -70,6 +76,8 @@ export class RaspDetector {
       "bot_user_agent",
       "rate_limit",
       "missing_headers",
+      "prompt_injection",
+      "secret_leak",
     ];
     for (const t of order) {
       if (threats.includes(t)) return t;

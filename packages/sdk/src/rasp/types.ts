@@ -7,6 +7,10 @@ export interface RaspConfig {
   blockThreshold: number;
   sequentialScanThreshold: number;
   redisUrl?: string;
+  /** Vazio desliga a inspeção semântica. A heurística não depende deste campo. */
+  layaSidecarUrl?: string;
+  layaApiKey?: string;
+  layaMaxInFlight?: number;
 }
 
 export const DEFAULT_RASP_CONFIG: RaspConfig = {

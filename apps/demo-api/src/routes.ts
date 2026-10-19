@@ -26,3 +26,11 @@ routes.get("/api/products/:id", (req, res) => {
 routes.get("/api/products", (_req, res) => {
   res.json({ count: products.length, products: products.slice(0, 10) });
 });
+
+routes.post("/api/chat", (req, res) => {
+  const message = typeof req.body?.message === "string" ? req.body.message : "";
+  res.json({
+    accepted: message.length > 0,
+    reply: message ? "mensagem recebida" : "envie { message }",
+  });
+});

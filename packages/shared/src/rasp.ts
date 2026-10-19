@@ -2,7 +2,9 @@ export type RaspThreatType =
   | "rate_limit"
   | "bot_user_agent"
   | "sequential_scan"
-  | "missing_headers";
+  | "missing_headers"
+  | "prompt_injection"
+  | "secret_leak";
 
 export type RaspAction = "logged" | "blocked";
 

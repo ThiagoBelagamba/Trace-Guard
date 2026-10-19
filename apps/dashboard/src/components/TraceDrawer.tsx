@@ -15,6 +15,8 @@ const THREAT_LABELS: Record<string, string> = {
   bot_user_agent: "Bot UA",
   sequential_scan: "Varredura",
   missing_headers: "Headers ausentes",
+  prompt_injection: "Injeção de prompt",
+  secret_leak: "Segredo no payload",
 };
 
 export function TraceDrawer({ traceId, onClose }: TraceDrawerProps) {

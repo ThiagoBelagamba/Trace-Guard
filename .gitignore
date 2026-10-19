@@ -22,6 +22,9 @@ docker/postgres/data/
 # Cache local do pnpm (centenas de MB — nunca versionar)
 .pnpm-store/
 
+# Checkpoint do Laya (fica em /home; o volume nomeado iria para o disco raiz)
+.cache/
+
 # Documento institucional (RGM / capa Unifran) — não versionar
 docs/Modelo Capa do documento.pdf
 
