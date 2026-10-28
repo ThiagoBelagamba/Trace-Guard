@@ -1,7 +1,14 @@
 "use client";
 
+import type { ReactNode } from "react";
 import type { UptimeCheckWithMonitor, UptimeMonitor, UptimeStats } from "@traceguard/shared";
 import { formatTime } from "../lib/format";
+import { uptimeTone } from "../lib/view";
+import { Card, Meta, TableCard } from "./ui/Card";
+import { Button, Pill } from "./ui/Controls";
+import { EmptyState } from "./ui/EmptyState";
+import { Icon, type IconName } from "./ui/Icon";
+import { DOT_TONES } from "./ui/tones";
 
 interface UptimePanelProps {
   monitors: UptimeMonitor[];
@@ -9,12 +16,6 @@ interface UptimePanelProps {
   latestChecks: Map<string, UptimeCheckWithMonitor>;
   onToggle: (id: string, enabled: boolean) => void;
   onDelete: (id: string) => void;
-}
-
-function statusBadge(status: string | undefined): string {
-  if (status === "up") return "bg-emerald-900/50 text-emerald-300";
-  if (status === "degraded") return "bg-amber-900/50 text-amber-300";
-  return "bg-red-900/50 text-red-300";
 }
 
 export function UptimePanel({
@@ -26,108 +27,141 @@ export function UptimePanel({
 }: UptimePanelProps) {
   if (monitors.length === 0) {
     return (
-      <div className="rounded-lg border border-surface-border bg-surface-card p-8 text-center text-gray-500">
-        Nenhum monitor configurado. Crie um alvo HTTP para começar.
-      </div>
+      <Card>
+        <EmptyState>Nenhum monitor configurado. Crie um alvo HTTP para começar.</EmptyState>
+      </Card>
     );
   }
 
   return (
-    <div className="space-y-4">
-      <div className="grid gap-3 sm:grid-cols-4">
-        <StatCard label="Monitors" value={stats.monitors} />
-        <StatCard label="Up" value={stats.up} accent="text-emerald-400" />
-        <StatCard label="Down" value={stats.down} accent="text-red-400" />
+    <>
+      <div className="grid gap-3 [grid-template-columns:repeat(auto-fit,minmax(min(100%,200px),1fr))]">
+        <StatCard label="Monitors" value={stats.monitors} icon="monitor" />
+        <StatCard label="Up" value={stats.up} icon="arrow-up" dot="var(--tg-ok)" />
+        <StatCard label="Down" value={stats.down} icon="arrow-down" dot="var(--tg-error)" danger />
         <StatCard
           label="Latência média"
-          value={`${stats.avgLatencyMs}ms`}
-          accent="text-blue-400"
+          value={
+            <>
+              {stats.avgLatencyMs}
+              <span className="ml-[3px] text-base font-medium text-tg-text-2">ms</span>
+            </>
+          }
+          icon="stopwatch"
         />
       </div>
 
-      <div className="overflow-x-auto rounded-lg border border-surface-border bg-surface-card">
-        <table className="w-full text-left text-sm">
+      <TableCard title="Monitores" meta={<Meta>{monitors.length} de {stats.monitors || monitors.length}</Meta>}>
+        <table className="tg-table min-w-[900px]">
           <thead>
-            <tr className="border-b border-surface-border text-xs uppercase text-gray-500">
-              <th className="px-4 py-3">Nome</th>
-              <th className="px-4 py-3">URL</th>
-              <th className="px-4 py-3">Status</th>
-              <th className="px-4 py-3">Latência</th>
-              <th className="px-4 py-3">Uptime 24h</th>
-              <th className="px-4 py-3">Último check</th>
-              <th className="px-4 py-3">Ações</th>
+            <tr>
+              <th scope="col">Nome</th>
+              <th scope="col">URL</th>
+              <th scope="col">Status</th>
+              <th scope="col">Latência</th>
+              <th scope="col">Uptime 24h</th>
+              <th scope="col">Último check</th>
+              <th scope="col" className="text-right">Ações</th>
             </tr>
           </thead>
           <tbody>
             {monitors.map((m) => {
               const check = latestChecks.get(m.id);
               const pct = stats.uptimePercent24h[m.id];
+              const tone = uptimeTone(check?.status);
               return (
-                <tr
-                  key={m.id}
-                  className="border-b border-surface-border/50 hover:bg-surface-border/20"
-                >
-                  <td className="px-4 py-2 font-medium text-gray-200">{m.name}</td>
-                  <td className="max-w-[200px] truncate px-4 py-2 text-gray-400">
-                    {m.url}
-                  </td>
-                  <td className="px-4 py-2">
-                    <span
-                      className={`rounded px-2 py-0.5 text-xs ${statusBadge(check?.status)}`}
-                    >
-                      {check?.status ?? "—"}
+                <tr key={m.id}>
+                  <td>
+                    <span className="inline-flex items-center gap-2.5 font-medium !text-tg-text">
+                      <span
+                        aria-hidden="true"
+                        className="h-2 w-2 rounded-full"
+                        style={{ background: DOT_TONES[tone] }}
+                      />
+                      {m.name}
                     </span>
                   </td>
-                  <td className="px-4 py-2 font-mono text-gray-300">
+                  <td className="max-w-[240px] truncate font-mono !text-tg-text-2">{m.url}</td>
+                  <td>
+                    {check ? <Pill tone={tone}>{check.status}</Pill> : <span className="text-tg-text-3">—</span>}
+                  </td>
+                  <td className="font-mono">
                     {check?.latencyMs != null ? `${check.latencyMs}ms` : "—"}
                   </td>
-                  <td className="px-4 py-2 text-gray-300">
-                    {pct != null ? `${pct}%` : "—"}
+                  <td>
+                    {pct != null ? (
+                      <span className="inline-flex items-center gap-2.5">
+                        <span className="font-mono">{pct}%</span>
+                        <span aria-hidden="true" className="h-1 w-[72px] overflow-hidden rounded-sm bg-[#26262B]">
+                          <span
+                            className="block h-full rounded-sm bg-tg-ok"
+                            style={{ width: `${Math.max(0, Math.min(pct, 100))}%` }}
+                          />
+                        </span>
+                      </span>
+                    ) : (
+                      "—"
+                    )}
                   </td>
-                  <td className="px-4 py-2 text-xs text-gray-500">
+                  <td className="font-mono !text-tg-text-2">
                     {check ? formatTime(check.checkedAt) : "—"}
                   </td>
-                  <td className="px-4 py-2">
-                    <div className="flex gap-2">
-                      <button
-                        type="button"
-                        onClick={() => onToggle(m.id, !m.enabled)}
-                        className="text-xs text-gray-400 hover:text-gray-200"
-                      >
+                  <td className="text-right">
+                    <span className="inline-flex gap-1.5">
+                      <Button size="sm" variant="secondary" onClick={() => onToggle(m.id, !m.enabled)}>
                         {m.enabled ? "Pausar" : "Ativar"}
-                      </button>
-                      <button
-                        type="button"
-                        onClick={() => onDelete(m.id)}
-                        className="text-xs text-red-400 hover:text-red-300"
-                      >
+                      </Button>
+                      <Button size="sm" variant="destructive" onClick={() => onDelete(m.id)}>
                         Remover
-                      </button>
-                    </div>
+                      </Button>
+                    </span>
                   </td>
                 </tr>
               );
             })}
           </tbody>
         </table>
-      </div>
-    </div>
+      </TableCard>
+    </>
   );
 }
 
 function StatCard({
   label,
   value,
-  accent = "text-gray-200",
+  icon,
+  dot,
+  danger = false,
 }: {
   label: string;
-  value: string | number;
-  accent?: string;
+  value: ReactNode;
+  icon: IconName;
+  dot?: string;
+  danger?: boolean;
 }) {
   return (
-    <div className="rounded-lg border border-surface-border bg-surface-card p-4">
-      <p className="text-xs text-gray-500">{label}</p>
-      <p className={`text-2xl font-semibold ${accent}`}>{value}</p>
+    <div className="flex justify-between gap-3 rounded-tg-xl border border-tg-border bg-tg-surface px-5 py-[18px]">
+      <div className="flex flex-col gap-3.5">
+        <span className="flex items-center gap-[7px] text-[13px] text-tg-text-2">
+          {dot && <span aria-hidden="true" className="h-[7px] w-[7px] rounded-full" style={{ background: dot }} />}
+          {label}
+        </span>
+        <span
+          className="text-[32px] font-semibold leading-none tracking-[-0.03em]"
+          style={danger ? { color: "#F2CFCB" } : undefined}
+        >
+          {value}
+        </span>
+      </div>
+      <div
+        className={
+          danger
+            ? "flex h-12 w-12 shrink-0 items-center justify-center rounded-tg-lg border border-[#4A302D] bg-[#2A1E1D] text-tg-error-text"
+            : "flex h-12 w-12 shrink-0 items-center justify-center rounded-tg-lg border border-[#27272C] bg-tg-surface-3 text-tg-text-2"
+        }
+      >
+        <Icon name={icon} size={20} />
+      </div>
     </div>
   );
 }

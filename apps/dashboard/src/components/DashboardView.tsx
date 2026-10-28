@@ -30,7 +30,7 @@ import { UptimePanel } from "./UptimePanel";
 import { UptimeTimeline } from "./UptimeTimeline";
 import { PageHeader } from "./PageHeader";
 import { Sidebar, TAB_META, type Tab } from "./Sidebar";
-import { Chip } from "./ui/Controls";
+import { Button, Chip } from "./ui/Controls";
 import { countByLevel, orderLevels } from "../lib/view";
 
 const EMPTY_STATS: EventStats = {
@@ -99,6 +99,7 @@ export function DashboardView() {
   const [loading, setLoading] = useState(true);
   const [tab, setTab] = useState<Tab>("events");
   const [selectedTraceId, setSelectedTraceId] = useState<string | null>(null);
+  const [monitorFormOpen, setMonitorFormOpen] = useState(false);
   const [filters, setFilters] = useState<FilterValues>({
     service: "",
     level: "",
@@ -302,13 +303,26 @@ export function DashboardView() {
                   <strong>{uptimeStats.down}</strong> fora do ar
                 </>
               }
+              actions={
+                <Button
+                  variant="primary"
+                  icon="plus"
+                  aria-expanded={monitorFormOpen}
+                  onClick={() => setMonitorFormOpen(true)}
+                >
+                  Novo monitor
+                </Button>
+              }
             />
-            <UptimeMonitorForm
-              onSubmit={async (data) => {
-                const monitor = await createUptimeMonitor(data);
-                setMonitors((prev) => [...prev, monitor]);
-              }}
-            />
+            {monitorFormOpen && (
+              <UptimeMonitorForm
+                onSubmit={async (data) => {
+                  const monitor = await createUptimeMonitor(data);
+                  setMonitors((prev) => [...prev, monitor]);
+                }}
+                onClose={() => setMonitorFormOpen(false)}
+              />
+            )}
             <UptimePanel
               monitors={monitors}
               stats={uptimeStats}

@@ -1,66 +1,45 @@
 "use client";
 
 import type { UptimeCheckWithMonitor } from "@traceguard/shared";
-import {
-  CartesianGrid,
-  Line,
-  LineChart,
-  ResponsiveContainer,
-  Tooltip,
-  XAxis,
-  YAxis,
-} from "recharts";
 import { formatTime } from "../lib/format";
+import { Card, CardHeader } from "./ui/Card";
+import { EmptyState } from "./ui/EmptyState";
+import { LineChartCard } from "./ui/LineChartCard";
 
 interface UptimeTimelineProps {
   checks: UptimeCheckWithMonitor[];
 }
 
 export function UptimeTimeline({ checks }: UptimeTimelineProps) {
-  const data = [...checks]
-    .reverse()
-    .slice(-30)
-    .map((c) => ({
-      label: formatTime(c.checkedAt),
-      latency: c.latencyMs ?? 0,
-      up: c.status === "up" ? 1 : 0,
-      monitor: c.monitorName,
-    }));
+  const recent = [...checks].reverse().slice(-30);
+  const data = recent.map((c) => ({
+    label: formatTime(c.checkedAt),
+    value: c.latencyMs ?? 0,
+  }));
+  const monitorNames = Array.from(new Set(recent.map((c) => c.monitorName)));
 
-  if (data.length === 0) {
-    return (
-      <div className="rounded-lg border border-surface-border bg-surface-card p-8 text-center text-sm text-gray-600">
-        Sem checks recentes para exibir timeline.
-      </div>
-    );
-  }
+  const legend =
+    monitorNames.length > 0 ? (
+      <span className="inline-flex items-center gap-[7px] text-xs text-tg-text-2">
+        <span aria-hidden="true" className="h-0.5 w-3.5 bg-tg-chart-line" />
+        {monitorNames.join(", ")}
+      </span>
+    ) : undefined;
+
+  const values = data.map((d) => d.value);
+  const ariaLabel =
+    data.length > 0
+      ? `Latência dos probes entre ${data[0].label} e ${data[data.length - 1].label}, de ${Math.min(...values)} a ${Math.max(...values)} ms`
+      : "Latência dos probes: sem dados";
 
   return (
-    <div className="rounded-lg border border-surface-border bg-surface-card p-4">
-      <h3 className="mb-4 text-sm font-medium text-gray-400">
-        Latência dos probes (últimos checks)
-      </h3>
-      <ResponsiveContainer width="100%" height={220}>
-        <LineChart data={data}>
-          <CartesianGrid strokeDasharray="3 3" stroke="#2d3748" />
-          <XAxis dataKey="label" tick={{ fill: "#9ca3af", fontSize: 10 }} />
-          <YAxis tick={{ fill: "#9ca3af", fontSize: 11 }} unit="ms" />
-          <Tooltip
-            contentStyle={{
-              background: "#1a2332",
-              border: "1px solid #2d3748",
-              borderRadius: 8,
-            }}
-          />
-          <Line
-            type="monotone"
-            dataKey="latency"
-            stroke="#60a5fa"
-            strokeWidth={2}
-            dot={false}
-          />
-        </LineChart>
-      </ResponsiveContainer>
-    </div>
+    <Card className="!gap-5">
+      <CardHeader title="Latência dos probes" subtitle="Últimos checks" meta={legend} />
+      {data.length === 0 ? (
+        <EmptyState>Sem checks recentes para exibir timeline.</EmptyState>
+      ) : (
+        <LineChartCard data={data} unit="ms" ariaLabel={ariaLabel} tooltipName="Latência" />
+      )}
+    </Card>
   );
 }

@@ -2,13 +2,15 @@
 
 import { useState } from "react";
 import type { CreateUptimeMonitorInput } from "@traceguard/shared";
+import { Card, CardHeader } from "./ui/Card";
+import { Button, Field } from "./ui/Controls";
 
 interface UptimeMonitorFormProps {
   onSubmit: (data: CreateUptimeMonitorInput) => Promise<void>;
+  onClose: () => void;
 }
 
-export function UptimeMonitorForm({ onSubmit }: UptimeMonitorFormProps) {
-  const [open, setOpen] = useState(false);
+export function UptimeMonitorForm({ onSubmit, onClose }: UptimeMonitorFormProps) {
   const [name, setName] = useState("");
   const [url, setUrl] = useState("");
   const [intervalSec, setIntervalSec] = useState(60);
@@ -21,72 +23,49 @@ export function UptimeMonitorForm({ onSubmit }: UptimeMonitorFormProps) {
       await onSubmit({ name, url, intervalSec });
       setName("");
       setUrl("");
-      setOpen(false);
+      onClose();
     } finally {
       setSaving(false);
     }
   }
 
-  if (!open) {
-    return (
-      <button
-        type="button"
-        onClick={() => setOpen(true)}
-        className="rounded-md bg-emerald-900/50 px-4 py-2 text-sm text-emerald-300 hover:bg-emerald-900/70"
-      >
-        + Novo monitor
-      </button>
-    );
-  }
-
   return (
-    <form
-      onSubmit={(e) => void handleSubmit(e)}
-      className="rounded-lg border border-surface-border bg-surface-card p-4 space-y-3"
-    >
-      <h3 className="text-sm font-medium text-gray-300">Novo monitor HTTP</h3>
-      <input
-        type="text"
-        placeholder="Nome"
-        value={name}
-        onChange={(e) => setName(e.target.value)}
-        required
-        className="w-full rounded border border-surface-border bg-surface-bg px-3 py-2 text-sm text-gray-200"
-      />
-      <input
-        type="url"
-        placeholder="https://..."
-        value={url}
-        onChange={(e) => setUrl(e.target.value)}
-        required
-        className="w-full rounded border border-surface-border bg-surface-bg px-3 py-2 text-sm text-gray-200"
-      />
-      <label className="flex items-center gap-2 text-sm text-gray-400">
-        Intervalo (s)
-        <input
-          type="number"
-          min={10}
-          value={intervalSec}
-          onChange={(e) => setIntervalSec(Number(e.target.value))}
-          className="w-24 rounded border border-surface-border bg-surface-bg px-2 py-1 text-gray-200"
-        />
-      </label>
-      <div className="flex gap-2">
-        <button
-          type="submit"
-          disabled={saving}
-          className="rounded bg-emerald-700 px-3 py-1.5 text-sm text-white disabled:opacity-50"
-        >
-          {saving ? "Salvando…" : "Criar"}
-        </button>
-        <button
-          type="button"
-          onClick={() => setOpen(false)}
-          className="rounded px-3 py-1.5 text-sm text-gray-400 hover:text-gray-200"
-        >
-          Cancelar
-        </button>
-      </div>
-    </form>
+    <Card as="div">
+      <form onSubmit={(e) => void handleSubmit(e)} className="flex flex-col gap-[18px]">
+        <CardHeader title="Novo monitor HTTP" />
+        <div className="grid gap-3 sm:grid-cols-[minmax(0,1fr)_minmax(0,2fr)_160px]">
+          <Field
+            label="Nome"
+            type="text"
+            value={name}
+            onChange={(e) => setName(e.target.value)}
+            required
+          />
+          <Field
+            label="URL"
+            type="url"
+            placeholder="https://..."
+            value={url}
+            onChange={(e) => setUrl(e.target.value)}
+            required
+          />
+          <Field
+            label="Intervalo em segundos"
+            type="number"
+            min={10}
+            value={intervalSec}
+            onChange={(e) => setIntervalSec(Number(e.target.value))}
+          />
+        </div>
+        <div className="flex flex-wrap gap-2">
+          <Button type="submit" variant="primary" disabled={saving}>
+            {saving ? "Criando…" : "Criar monitor"}
+          </Button>
+          <Button variant="secondary" onClick={onClose}>
+            Cancelar
+          </Button>
+        </div>
+      </form>
+    </Card>
   );
 }
