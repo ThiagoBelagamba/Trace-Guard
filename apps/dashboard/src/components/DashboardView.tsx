@@ -59,6 +59,9 @@ const EMPTY_UPTIME_STATS: UptimeStats = {
   uptimePercent24h: {},
 };
 
+/** Stats de alertas atualizam mais rápido para o badge acompanhar a fila ao vivo. */
+const ALERT_STATS_REFRESH_MS = 10_000;
+
 const LEVEL_SUMMARY_LABELS: Record<string, string> = {
   error: "erros",
   warn: "warn",
@@ -189,10 +192,8 @@ export function DashboardView() {
     [filteredEvents]
   );
 
-  const actionableAlerts = useMemo(
-    () => alerts.filter((a) => !a.suppressed).length,
-    [alerts]
-  );
+  // Mesmo número do cabeçalho e do card "Acionáveis · 24h".
+  const actionableAlerts = alertStats.fired;
 
   const raspTotal = useMemo(
     () => Object.values(raspStats.byThreatType).reduce((acc, n) => acc + n, 0),
@@ -203,10 +204,17 @@ export function DashboardView() {
     if (!connected) return;
     const timer = setInterval(() => {
       void fetchEventStats("1m").then(setStats).catch(console.error);
-      void fetchAlertStats().then(setAlertStats).catch(console.error);
       void fetchRaspStats().then(setRaspStats).catch(console.error);
       void fetchUptimeStats().then(setUptimeStats).catch(console.error);
     }, 30_000);
+    return () => clearInterval(timer);
+  }, [connected]);
+
+  useEffect(() => {
+    if (!connected) return;
+    const timer = setInterval(() => {
+      void fetchAlertStats().then(setAlertStats).catch(console.error);
+    }, ALERT_STATS_REFRESH_MS);
     return () => clearInterval(timer);
   }, [connected]);
 

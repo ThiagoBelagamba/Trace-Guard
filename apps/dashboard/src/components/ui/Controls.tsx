@@ -131,7 +131,7 @@ export function SegmentedControl<T extends string>({
 }: SegmentedControlProps<T>) {
   return (
     <div
-      role="tablist"
+      role="group"
       aria-label={label}
       className="flex gap-0.5 rounded-[9px] border border-tg-border bg-tg-sidebar p-[3px]"
     >
@@ -141,8 +141,7 @@ export function SegmentedControl<T extends string>({
           <button
             key={item.value}
             type="button"
-            role="tab"
-            aria-selected={active}
+            aria-pressed={active}
             onClick={() => onChange(item.value)}
             className={clsx(
               "inline-flex h-[34px] items-center gap-2 rounded-[7px] border px-3 text-[13px]",
