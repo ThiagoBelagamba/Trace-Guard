@@ -19,7 +19,6 @@ import {
 import { useTelemetrySocket } from "../hooks/useTelemetrySocket";
 import { AlertStatsBanner } from "./AlertStatsBanner";
 import { AlertsPanel } from "./AlertsPanel";
-import { ConnectionStatus } from "./ConnectionStatus";
 import { EventCharts } from "./EventCharts";
 import { EventTable } from "./EventTable";
 import { FiltersBar, type FilterValues } from "./FiltersBar";
@@ -29,6 +28,10 @@ import { TraceDrawer } from "./TraceDrawer";
 import { UptimeMonitorForm } from "./UptimeMonitorForm";
 import { UptimePanel } from "./UptimePanel";
 import { UptimeTimeline } from "./UptimeTimeline";
+import { PageHeader } from "./PageHeader";
+import { Sidebar, TAB_META, type Tab } from "./Sidebar";
+import { Chip } from "./ui/Controls";
+import { countByLevel, orderLevels } from "../lib/view";
 
 const EMPTY_STATS: EventStats = {
   timeline: [],
@@ -56,7 +59,32 @@ const EMPTY_UPTIME_STATS: UptimeStats = {
   uptimePercent24h: {},
 };
 
-type Tab = "events" | "alerts" | "security" | "uptime";
+const LEVEL_SUMMARY_LABELS: Record<string, string> = {
+  error: "erros",
+  warn: "warn",
+  info: "info",
+  debug: "debug",
+};
+
+function EventsSummary({
+  total,
+  byLevel,
+}: {
+  total: number;
+  byLevel: Record<string, number>;
+}) {
+  return (
+    <>
+      <strong>{total}</strong> eventos na sessão
+      {orderLevels(byLevel).map(({ level, count }) => (
+        <span key={level}>
+          {" · "}
+          <strong>{count}</strong> {LEVEL_SUMMARY_LABELS[level] ?? level}
+        </span>
+      ))}
+    </>
+  );
+}
 
 export function DashboardView() {
   const [initialEvents, setInitialEvents] = useState<DashboardEvent[]>([]);
@@ -149,6 +177,21 @@ export function DashboardView() {
     });
   }, [events, filters.service, filters.level]);
 
+  const eventLevelCounts = useMemo(
+    () => countByLevel(filteredEvents),
+    [filteredEvents]
+  );
+
+  const actionableAlerts = useMemo(
+    () => alerts.filter((a) => !a.suppressed).length,
+    [alerts]
+  );
+
+  const raspTotal = useMemo(
+    () => Object.values(raspStats.byThreatType).reduce((acc, n) => acc + n, 0),
+    [raspStats.byThreatType]
+  );
+
   useEffect(() => {
     if (!connected) return;
     const timer = setInterval(() => {
@@ -162,84 +205,38 @@ export function DashboardView() {
 
   if (loading) {
     return (
-      <div className="flex min-h-screen items-center justify-center text-gray-500">
+      <div className="flex min-h-screen items-center justify-center bg-tg-bg text-sm text-tg-text-2">
         Carregando dashboard…
       </div>
     );
   }
 
   return (
-    <div className="min-h-screen">
-      <header className="border-b border-surface-border bg-surface-card px-6 py-4">
-        <div className="mx-auto flex max-w-7xl flex-wrap items-center justify-between gap-4">
-          <div>
-            <h1 className="text-xl font-semibold text-white">TraceGuard</h1>
-            <p className="text-sm text-gray-500">
-              Observabilidade em tempo real
-            </p>
-          </div>
-          <ConnectionStatus
-            connected={connected}
-            error={error}
-            eventCount={filteredEvents.length}
-          />
-        </div>
-      </header>
+    <div className="flex min-h-screen flex-wrap bg-tg-bg text-tg-text">
+      <Sidebar
+        tab={tab}
+        onTabChange={setTab}
+        actionableAlerts={actionableAlerts}
+        connected={connected}
+        error={error}
+        eventCount={filteredEvents.length}
+      />
 
-      <main className="mx-auto max-w-7xl space-y-6 px-6 py-6">
-        <div className="flex gap-2 border-b border-surface-border pb-2">
-          <button
-            type="button"
-            onClick={() => setTab("events")}
-            className={`px-4 py-2 text-sm font-medium ${
-              tab === "events"
-                ? "border-b-2 border-emerald-400 text-emerald-300"
-                : "text-gray-500 hover:text-gray-300"
-            }`}
-          >
-            Eventos
-          </button>
-          <button
-            type="button"
-            onClick={() => setTab("alerts")}
-            className={`px-4 py-2 text-sm font-medium ${
-              tab === "alerts"
-                ? "border-b-2 border-amber-400 text-amber-300"
-                : "text-gray-500 hover:text-gray-300"
-            }`}
-          >
-            Alertas
-          </button>
-          <button
-            type="button"
-            onClick={() => setTab("security")}
-            className={`px-4 py-2 text-sm font-medium ${
-              tab === "security"
-                ? "border-b-2 border-purple-400 text-purple-300"
-                : "text-gray-500 hover:text-gray-300"
-            }`}
-          >
-            Segurança
-          </button>
-          <button
-            type="button"
-            onClick={() => setTab("uptime")}
-            className={`px-4 py-2 text-sm font-medium ${
-              tab === "uptime"
-                ? "border-b-2 border-blue-400 text-blue-300"
-                : "text-gray-500 hover:text-gray-300"
-            }`}
-          >
-            Uptime
-          </button>
-        </div>
-
+      <main className="box-border flex min-w-0 flex-[999_1_560px] flex-col gap-6 px-4 pb-12 pt-5 sm:px-10">
         {tab === "events" && (
           <>
-            <FiltersBar
-              filters={filters}
-              onChange={setFilters}
-              services={services}
+            <PageHeader
+              section="Eventos"
+              icon={TAB_META.events.icon}
+              title="Eventos"
+              summary={<EventsSummary total={filteredEvents.length} byLevel={eventLevelCounts} />}
+              actions={
+                <FiltersBar
+                  filters={filters}
+                  onChange={setFilters}
+                  services={services}
+                />
+              }
             />
             <EventCharts stats={stats} />
             <EventTable events={filteredEvents} onSelectTrace={setSelectedTraceId} />
@@ -248,6 +245,17 @@ export function DashboardView() {
 
         {tab === "alerts" && (
           <>
+            <PageHeader
+              section="Alertas"
+              icon={TAB_META.alerts.icon}
+              title="Alertas"
+              summary={
+                <>
+                  <strong>{alertStats.fired}</strong> acionáveis ·{" "}
+                  <strong>{alertStats.suppressed}</strong> suprimidos por cooldown nas últimas 24h
+                </>
+              }
+            />
             <AlertStatsBanner stats={alertStats} />
             <AlertsPanel alerts={alerts} />
           </>
@@ -255,6 +263,19 @@ export function DashboardView() {
 
         {tab === "security" && (
           <>
+            <PageHeader
+              section="Segurança"
+              crumb="RASP"
+              icon={TAB_META.security.icon}
+              title="Segurança"
+              summary={
+                <>
+                  <strong>{raspTotal}</strong> ameaças nas últimas 24h ·{" "}
+                  <strong>{raspStats.blocked}</strong> bloqueadas
+                </>
+              }
+              actions={<Chip icon="clock">Últimas 24h</Chip>}
+            />
             <RaspStatsCharts stats={raspStats} />
             <RaspPanel events={raspEvents} onSelectTrace={setSelectedTraceId} />
           </>
@@ -262,6 +283,18 @@ export function DashboardView() {
 
         {tab === "uptime" && (
           <>
+            <PageHeader
+              section="Uptime"
+              icon={TAB_META.uptime.icon}
+              title="Uptime"
+              summary={
+                <>
+                  <strong>{uptimeStats.monitors}</strong>{" "}
+                  {uptimeStats.monitors === 1 ? "monitor" : "monitores"} ·{" "}
+                  <strong>{uptimeStats.down}</strong> fora do ar
+                </>
+              }
+            />
             <UptimeMonitorForm
               onSubmit={async (data) => {
                 const monitor = await createUptimeMonitor(data);
