@@ -106,9 +106,13 @@ it("threatLabel traduz e cai no próprio tipo", () => {
 });
 
 describe("chartYMax", () => {
-  it("dá folga e arredonda para múltiplo de 4 (5 marcas inteiras)", () => expect(chartYMax(15)).toBe(20));
-  it("valor exato no topo ganha folga", () => expect(chartYMax(20)).toBe(24));
-  it("valores pequenos", () => expect(chartYMax(2)).toBe(4));
+  // O topo é 4 × um passo "redondo" (1, 2, 2,5, 5 ou 10 × 10^n): 5 marcas fáceis de ler.
+  it("15 eventos → 0/5/10/15/20", () => expect(chartYMax(15)).toBe(20));
+  it("valor exato no topo ganha folga", () => expect(chartYMax(20)).toBe(40));
+  it("37ms → 0/20/40/60/80", () => expect(chartYMax(37)).toBe(80));
+  it("72ms → 0/25/50/75/100", () => expect(chartYMax(72)).toBe(100));
+  it("1234ms → passos de 500", () => expect(chartYMax(1234)).toBe(2000));
+  it("valores pequenos mantêm marcas inteiras", () => expect(chartYMax(2)).toBe(4));
   it("sem dados vira 4", () => {
     expect(chartYMax(0)).toBe(4);
     expect(chartYMax(-3)).toBe(4);

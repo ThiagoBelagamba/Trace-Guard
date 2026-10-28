@@ -26,11 +26,16 @@ export function barValueFontSize(itemCount: number, maxValue: number): number {
 
 /**
  * Topo do eixo Y dos gráficos de linha: 15% de folga para o último ponto não ser cortado,
- * arredondado a múltiplo de 4 para gerar 5 marcas inteiras igualmente espaçadas.
+ * igual a 4 × um passo "redondo" (1, 2, 2,5, 5 ou 10 × 10^n, nunca menor que 1),
+ * gerando 5 marcas inteiras e fáceis de ler.
  */
 export function chartYMax(dataMax: number): number {
   if (dataMax <= 0) return 4;
-  return Math.ceil((dataMax * 1.15) / 4) * 4;
+  const rawStep = (dataMax * 1.15) / 4;
+  const magnitude = 10 ** Math.floor(Math.log10(rawStep));
+  const multipliers = magnitude >= 10 ? [1, 2, 2.5, 5, 10] : [1, 2, 5, 10];
+  const step = (multipliers.find((m) => m * magnitude >= rawStep) ?? 10) * magnitude;
+  return Math.max(1, step) * 4;
 }
 
 export function activeMonitorsLabel(monitors: Array<{ enabled: boolean }>): string {
