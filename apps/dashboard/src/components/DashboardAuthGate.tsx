@@ -1,6 +1,9 @@
 "use client";
 
 import { useState } from "react";
+import { Card } from "./ui/Card";
+import { Button, Field } from "./ui/Controls";
+import { Icon } from "./ui/Icon";
 
 const REQUIRED = process.env.NEXT_PUBLIC_DASHBOARD_PASSWORD;
 const STORAGE_KEY = "traceguard.dashboard.auth";
@@ -21,40 +24,46 @@ export function DashboardAuthGate({ children }: DashboardAuthGateProps) {
   if (unlocked) return children;
 
   return (
-    <div className="flex min-h-screen items-center justify-center bg-surface px-4">
-      <form
-        className="w-full max-w-sm space-y-4 rounded-lg border border-surface-border bg-surface-card p-6"
-        onSubmit={(event) => {
-          event.preventDefault();
-          if (password === REQUIRED) {
-            sessionStorage.setItem(STORAGE_KEY, "ok");
-            setUnlocked(true);
-            return;
-          }
-          setError("Senha inválida");
-        }}
-      >
-        <div>
-          <h1 className="text-lg font-semibold text-white">TraceGuard</h1>
-          <p className="text-sm text-gray-500">Acesso ao dashboard</p>
-        </div>
-        <label className="block text-sm text-gray-400">
-          Senha
-          <input
+    <div className="flex min-h-screen items-center justify-center bg-tg-bg px-4">
+      <Card as="div" className="w-full max-w-sm">
+        <form
+          className="flex flex-col gap-5"
+          onSubmit={(event) => {
+            event.preventDefault();
+            if (password === REQUIRED) {
+              sessionStorage.setItem(STORAGE_KEY, "ok");
+              setUnlocked(true);
+              return;
+            }
+            setError("Senha inválida");
+          }}
+        >
+          <div className="flex items-center gap-2.5">
+            <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-[9px] border border-tg-border-strong bg-tg-surface-3 text-tg-text">
+              <Icon name="logo" size={18} />
+            </div>
+            <div className="flex flex-col gap-0.5">
+              <h1 className="m-0 text-[15px] font-semibold tracking-[-0.01em]">TraceGuard</h1>
+              <p className="m-0 text-xs text-tg-text-3">Acesso ao dashboard</p>
+            </div>
+          </div>
+          <Field
+            label="Senha"
             type="password"
             value={password}
             onChange={(event) => setPassword(event.target.value)}
-            className="mt-1 w-full rounded border border-surface-border bg-surface px-3 py-2 text-white"
+            aria-invalid={error ? true : undefined}
           />
-        </label>
-        {error && <p className="text-sm text-red-300">{error}</p>}
-        <button
-          type="submit"
-          className="w-full rounded bg-emerald-700 px-3 py-2 text-sm font-medium text-white hover:bg-emerald-600"
-        >
-          Entrar
-        </button>
-      </form>
+          {error && (
+            <p role="alert" className="m-0 text-[13px] text-tg-error-text">
+              {error}
+            </p>
+          )}
+          <Button type="submit" variant="primary" className="w-full">
+            Entrar
+          </Button>
+        </form>
+      </Card>
     </div>
   );
 }
