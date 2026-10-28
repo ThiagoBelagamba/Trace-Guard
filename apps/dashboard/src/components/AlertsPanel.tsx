@@ -1,12 +1,26 @@
 "use client";
 
 import { useMemo, useState } from "react";
+import clsx from "clsx";
 import type { AlertFired } from "@traceguard/shared";
-import { formatTime, severityBadgeClass } from "../lib/format";
+import { formatTime } from "../lib/format";
+import { alertSource } from "../lib/view";
+import { Card } from "./ui/Card";
+import { Pill, SegmentedControl } from "./ui/Controls";
+import { EmptyState } from "./ui/EmptyState";
+import { Icon, type IconName } from "./ui/Icon";
 
 interface AlertsPanelProps {
   alerts: AlertFired[];
 }
+
+const SOURCE_ICONS: Record<ReturnType<typeof alertSource>, IconName> = {
+  uptime: "pulse",
+  rasp: "shield",
+  generic: "alert",
+};
+
+type View = "active" | "suppressed";
 
 export function AlertsPanel({ alerts }: AlertsPanelProps) {
   const [showSuppressed, setShowSuppressed] = useState(false);
@@ -23,72 +37,68 @@ export function AlertsPanel({ alerts }: AlertsPanelProps) {
   const list = showSuppressed ? suppressed : active;
 
   return (
-    <div className="space-y-4">
-      <div className="flex flex-wrap gap-3">
-        <button
-          type="button"
-          onClick={() => setShowSuppressed(false)}
-          className={`rounded-md px-3 py-1.5 text-sm ${
-            !showSuppressed
-              ? "bg-emerald-900/50 text-emerald-300"
-              : "bg-surface-card text-gray-400 hover:text-gray-200"
-          }`}
-        >
-          Acionáveis ({active.length})
-        </button>
-        <button
-          type="button"
-          onClick={() => setShowSuppressed(true)}
-          className={`rounded-md px-3 py-1.5 text-sm ${
-            showSuppressed
-              ? "bg-amber-900/50 text-amber-300"
-              : "bg-surface-card text-gray-400 hover:text-gray-200"
-          }`}
-        >
-          Ruído filtrado ({suppressed.length})
-        </button>
+    <Card flush>
+      <div className="flex flex-wrap items-center justify-between gap-3 border-b border-tg-border px-5 py-3.5">
+        <h2 className="m-0 text-sm font-medium">Fila de alertas</h2>
+        <SegmentedControl<View>
+          label="Filtro de alertas"
+          value={showSuppressed ? "suppressed" : "active"}
+          onChange={(v) => setShowSuppressed(v === "suppressed")}
+          items={[
+            { value: "active", label: "Acionáveis", count: active.length },
+            { value: "suppressed", label: "Ruído filtrado", count: suppressed.length },
+          ]}
+        />
       </div>
 
       {list.length === 0 ? (
-        <div className="rounded-lg border border-surface-border bg-surface-card p-8 text-center text-gray-500">
-          {showSuppressed
-            ? "Nenhum alerta suprimido por cooldown."
-            : "Nenhum alerta acionável. Execute pnpm dev:demo:stress para testar."}
-        </div>
+        <EmptyState>
+          {showSuppressed ? (
+            "Nenhum alerta suprimido por cooldown."
+          ) : (
+            <>
+              Nenhum alerta acionável. Execute <code>pnpm dev:demo:stress</code> para testar.
+            </>
+          )}
+        </EmptyState>
       ) : (
-        <div className="space-y-3">
+        <ul className="m-0 list-none p-0">
           {list.map((alert) => (
-            <article
+            <li
               key={alert.id}
-              className={`rounded-lg border p-4 ${
-                alert.suppressed
-                  ? "border-amber-900/30 bg-amber-950/20 opacity-80"
-                  : "border-surface-border bg-surface-card"
-              }`}
+              className={clsx(
+                "flex flex-wrap items-center gap-4 border-b border-tg-border-subtle px-5 py-[18px] last:border-b-0",
+                alert.suppressed && "opacity-70"
+              )}
             >
-              <div className="flex flex-wrap items-center gap-2">
-                <span className={severityBadgeClass(alert.severity)}>
-                  {alert.severity}
+              <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-[10px] border border-[#27272C] bg-tg-surface-3 text-[#D4D4D8]">
+                <Icon name={SOURCE_ICONS[alertSource(alert.metadata)]} size={18} />
+              </div>
+              <div className="flex min-w-0 flex-[1_1_320px] flex-col gap-1">
+                <div className="flex flex-wrap items-center gap-2.5">
+                  <Pill tone={alert.severity === "critical" ? "error" : "warn"} mono>
+                    {alert.severity}
+                  </Pill>
+                  {alert.suppressed && <Pill tone="neutral">suprimido</Pill>}
+                  <h3 className="m-0 text-[15px] font-medium">{alert.title}</h3>
+                </div>
+                <p className="m-0 text-[13px] text-tg-text-2">{alert.message}</p>
+                <p className="m-0 mt-0.5 text-xs text-tg-text-3">
+                  Regra: {alert.ruleName} · {alert.eventCount} eventos
+                </p>
+              </div>
+              <div className="ml-auto flex items-center gap-2.5">
+                <span className="rounded-tg-sm border border-tg-border-strong px-2 py-[3px] text-xs text-tg-text-2">
+                  {alert.service}
                 </span>
-                {alert.suppressed && (
-                  <span className="rounded bg-amber-900/40 px-2 py-0.5 text-xs text-amber-400">
-                    suprimido
-                  </span>
-                )}
-                <span className="text-xs text-gray-500">
+                <span className="min-w-16 text-right font-mono text-xs text-tg-text-2">
                   {formatTime(alert.firedAt)}
                 </span>
-                <span className="text-xs text-gray-500">· {alert.service}</span>
               </div>
-              <h3 className="mt-2 font-medium text-gray-100">{alert.title}</h3>
-              <p className="mt-1 text-sm text-gray-400">{alert.message}</p>
-              <p className="mt-2 text-xs text-gray-600">
-                Regra: {alert.ruleName} · {alert.eventCount} eventos
-              </p>
-            </article>
+            </li>
           ))}
-        </div>
+        </ul>
       )}
-    </div>
+    </Card>
   );
 }

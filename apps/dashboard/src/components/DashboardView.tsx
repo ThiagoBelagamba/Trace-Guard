@@ -281,7 +281,11 @@ export function DashboardView() {
               actions={<Chip icon="clock">Últimas 24h</Chip>}
             />
             <RaspStatsCharts stats={raspStats} />
-            <RaspPanel events={raspEvents} onSelectTrace={setSelectedTraceId} />
+            <RaspPanel
+              events={raspEvents}
+              onSelectTrace={setSelectedTraceId}
+              live={connected}
+            />
           </>
         )}
 

@@ -2,96 +2,98 @@
 
 import type { RaspEvent } from "@traceguard/shared";
 import { formatTime } from "../lib/format";
+import { threatLabel } from "../lib/labels";
+import { MethodTag } from "./EventTable";
+import { LiveIndicator, TableCard } from "./ui/Card";
+import { Pill } from "./ui/Controls";
+import { EmptyState } from "./ui/EmptyState";
 
 export type RaspEventWithId = RaspEvent & { id?: string };
 
 interface RaspPanelProps {
   events: RaspEventWithId[];
   onSelectTrace?: (traceId: string) => void;
+  live: boolean;
 }
 
-const THREAT_LABELS: Record<string, string> = {
-  rate_limit: "Rate limit",
-  bot_user_agent: "Bot UA",
-  sequential_scan: "Varredura",
-  missing_headers: "Headers ausentes",
-  prompt_injection: "Injeção de prompt",
-  secret_leak: "Segredo no payload",
-};
-
-function actionClass(action: string): string {
-  return action === "blocked"
-    ? "bg-red-900/50 text-red-300"
-    : "bg-blue-900/40 text-blue-300";
-}
-
-export function RaspPanel({ events, onSelectTrace }: RaspPanelProps) {
+export function RaspPanel({ events, onSelectTrace, live }: RaspPanelProps) {
   if (events.length === 0) {
     return (
-      <div className="rounded-lg border border-surface-border bg-surface-card p-8 text-center text-gray-500">
-        Nenhum evento RASP. Execute{" "}
-        <code className="text-emerald-400">pnpm dev:demo-api</code> e{" "}
-        <code className="text-emerald-400">pnpm demo:scrape</code>.
-      </div>
+      <TableCard title="Detecções RASP" meta={<LiveIndicator live={live} />}>
+        <EmptyState>
+          Nenhum evento RASP. Execute <code>pnpm dev:demo-api</code> e <code>pnpm demo:scrape</code>.
+        </EmptyState>
+      </TableCard>
     );
   }
 
   return (
-    <div className="overflow-x-auto rounded-lg border border-surface-border bg-surface-card">
-      <table className="w-full text-left text-sm">
+    <TableCard title="Detecções RASP" meta={<LiveIndicator live={live} />}>
+      <table className="tg-table min-w-[900px]">
         <thead>
-          <tr className="border-b border-surface-border text-xs uppercase text-gray-500">
-            <th className="px-4 py-3">Hora</th>
-            <th className="px-4 py-3">IP</th>
-            <th className="px-4 py-3">Ameaça</th>
-            <th className="px-4 py-3">Ação</th>
-            <th className="px-4 py-3">Score</th>
-            <th className="px-4 py-3">Path</th>
-            <th className="px-4 py-3">Trace</th>
+          <tr>
+            <th scope="col">Hora</th>
+            <th scope="col">IP</th>
+            <th scope="col">Ameaça</th>
+            <th scope="col">Ação</th>
+            <th scope="col">Score</th>
+            <th scope="col">Path</th>
+            <th scope="col">Trace</th>
           </tr>
         </thead>
         <tbody>
-          {events.map((ev, idx) => (
-            <tr
-              key={ev.id ?? `${ev.traceId}-${ev.timestamp}-${idx}`}
-              className="border-b border-surface-border/50 hover:bg-surface-border/20"
-            >
-              <td className="whitespace-nowrap px-4 py-2 text-gray-400">
-                {formatTime(ev.timestamp)}
-              </td>
-              <td className="px-4 py-2 font-mono text-xs text-gray-300">
-                {ev.clientIp}
-              </td>
-              <td className="px-4 py-2">
-                <span className="rounded bg-purple-900/40 px-2 py-0.5 text-xs text-purple-300">
-                  {THREAT_LABELS[ev.threatType] ?? ev.threatType}
-                </span>
-              </td>
-              <td className="px-4 py-2">
-                <span
-                  className={`rounded px-2 py-0.5 text-xs ${actionClass(ev.action)}`}
-                >
-                  {ev.action}
-                </span>
-              </td>
-              <td className="px-4 py-2 font-mono text-gray-300">{ev.score}</td>
-              <td className="max-w-[200px] truncate px-4 py-2 text-gray-400">
-                {ev.method} {ev.path}
-              </td>
-              <td className="px-4 py-2 font-mono text-xs text-gray-500">
-                <button
-                  type="button"
-                  title="Abrir detalhe do trace"
-                  onClick={() => onSelectTrace?.(ev.traceId)}
-                  className="hover:text-emerald-400"
-                >
-                  {ev.traceId.slice(0, 8)}…
-                </button>
-              </td>
-            </tr>
-          ))}
+          {events.map((ev, idx) => {
+            const blocked = ev.action === "blocked";
+            const score = Math.max(0, Math.min(ev.score, 100));
+            return (
+              <tr key={ev.id ?? `${ev.traceId}-${ev.timestamp}-${idx}`}>
+                <td className="font-mono !text-tg-text-2">{formatTime(ev.timestamp)}</td>
+                <td className="font-mono">{ev.clientIp}</td>
+                <td>
+                  <Pill tone="threat">{threatLabel(ev.threatType)}</Pill>
+                </td>
+                <td>
+                  {blocked ? (
+                    <Pill tone="error" icon="ban">
+                      blocked
+                    </Pill>
+                  ) : (
+                    <Pill tone="info">{ev.action}</Pill>
+                  )}
+                </td>
+                <td>
+                  <span className="inline-flex items-center gap-2">
+                    <span className="font-mono !text-tg-text">{ev.score}</span>
+                    <span aria-hidden="true" className="h-1 w-9 overflow-hidden rounded-sm bg-[#26262B]">
+                      <span
+                        className="block h-full rounded-sm"
+                        style={{
+                          width: `${score}%`,
+                          background: blocked ? "var(--tg-error)" : "var(--tg-info)",
+                        }}
+                      />
+                    </span>
+                  </span>
+                </td>
+                <td className="max-w-[260px] truncate">
+                  <MethodTag>{ev.method}</MethodTag>
+                  <span className="font-mono text-tg-text">{ev.path}</span>
+                </td>
+                <td className="font-mono">
+                  <button
+                    type="button"
+                    title="Abrir detalhe do trace"
+                    onClick={() => onSelectTrace?.(ev.traceId)}
+                    className="rounded-sm text-tg-text-3 hover:text-tg-text hover:underline"
+                  >
+                    {ev.traceId.slice(0, 8)}…
+                  </button>
+                </td>
+              </tr>
+            );
+          })}
         </tbody>
       </table>
-    </div>
+    </TableCard>
   );
 }
