@@ -3,7 +3,7 @@
 import type { ReactNode } from "react";
 import type { UptimeCheckWithMonitor, UptimeMonitor, UptimeStats } from "@traceguard/shared";
 import { formatTime } from "../lib/format";
-import { uptimeTone } from "../lib/view";
+import { activeMonitorsLabel, uptimeTone } from "../lib/view";
 import { Card, Meta, TableCard } from "./ui/Card";
 import { Button, Pill } from "./ui/Controls";
 import { EmptyState } from "./ui/EmptyState";
@@ -51,7 +51,7 @@ export function UptimePanel({
         />
       </div>
 
-      <TableCard title="Monitores" meta={<Meta>{monitors.length} de {stats.monitors || monitors.length}</Meta>}>
+      <TableCard title="Monitores" meta={<Meta>{activeMonitorsLabel(monitors)}</Meta>}>
         <table className="tg-table min-w-[900px]">
           <thead>
             <tr>

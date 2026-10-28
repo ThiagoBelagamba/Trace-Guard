@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import type { AlertFired, AlertStats, DashboardEvent, EventStats, RaspEvent, RaspStats, UptimeCheckWithMonitor, UptimeMonitor, UptimeStats } from "@traceguard/shared";
 import {
   createUptimeMonitor,
@@ -100,6 +100,12 @@ export function DashboardView() {
   const [tab, setTab] = useState<Tab>("events");
   const [selectedTraceId, setSelectedTraceId] = useState<string | null>(null);
   const [monitorFormOpen, setMonitorFormOpen] = useState(false);
+  const newMonitorButtonRef = useRef<HTMLButtonElement>(null);
+
+  function closeMonitorForm() {
+    setMonitorFormOpen(false);
+    requestAnimationFrame(() => newMonitorButtonRef.current?.focus());
+  }
   const [filters, setFilters] = useState<FilterValues>({
     service: "",
     level: "",
@@ -307,7 +313,9 @@ export function DashboardView() {
                 <Button
                   variant="primary"
                   icon="plus"
+                  ref={newMonitorButtonRef}
                   aria-expanded={monitorFormOpen}
+                  aria-controls="uptime-monitor-form"
                   onClick={() => setMonitorFormOpen(true)}
                 >
                   Novo monitor
@@ -320,7 +328,7 @@ export function DashboardView() {
                   const monitor = await createUptimeMonitor(data);
                   setMonitors((prev) => [...prev, monitor]);
                 }}
-                onClose={() => setMonitorFormOpen(false)}
+                onClose={closeMonitorForm}
               />
             )}
             <UptimePanel

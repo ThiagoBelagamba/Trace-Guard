@@ -31,12 +31,17 @@ export function UptimeMonitorForm({ onSubmit, onClose }: UptimeMonitorFormProps)
 
   return (
     <Card as="div">
-      <form onSubmit={(e) => void handleSubmit(e)} className="flex flex-col gap-[18px]">
+      <form
+        id="uptime-monitor-form"
+        onSubmit={(e) => void handleSubmit(e)}
+        className="flex flex-col gap-[18px]"
+      >
         <CardHeader title="Novo monitor HTTP" />
         <div className="grid gap-3 sm:grid-cols-[minmax(0,1fr)_minmax(0,2fr)_160px]">
           <Field
             label="Nome"
             type="text"
+            autoFocus
             value={name}
             onChange={(e) => setName(e.target.value)}
             required

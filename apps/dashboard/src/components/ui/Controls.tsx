@@ -1,5 +1,5 @@
 import clsx from "clsx";
-import { useId, type ButtonHTMLAttributes, type InputHTMLAttributes, type ReactNode } from "react";
+import { useId, type ButtonHTMLAttributes, type InputHTMLAttributes, type ReactNode, type Ref } from "react";
 import type { Tone } from "../../lib/view";
 import { Icon, type IconName } from "./Icon";
 
@@ -32,6 +32,7 @@ interface ButtonProps extends ButtonHTMLAttributes<HTMLButtonElement> {
   variant?: "primary" | "secondary" | "destructive";
   size?: "md" | "sm";
   icon?: IconName;
+  ref?: Ref<HTMLButtonElement>;
 }
 
 export function Button({
