@@ -42,3 +42,7 @@ docs/tcc/latex/*.synctex.gz
 *.toc
 *.out
 *.synctex.gz
+
+# Configuração local de agentes e referências do redesign — não versionar
+.agents/
+traceguard-redesign/
