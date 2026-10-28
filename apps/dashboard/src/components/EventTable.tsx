@@ -71,20 +71,22 @@ export function EventTable({ events, onSelectTrace, live }: EventTableProps) {
                     type="button"
                     title="Abrir detalhe do trace"
                     onClick={() => onSelectTrace?.(event.traceId)}
-                    className="rounded-sm text-tg-text-3 hover:text-tg-text hover:underline"
+                    className="-mx-1 -my-[11px] inline-block rounded-sm px-1 py-[11px] text-tg-text-3 hover:text-tg-text hover:underline"
                   >
                     {truncateTraceId(event.traceId)}
                   </button>
                 </td>
-                <td className="max-w-md truncate !text-tg-text">
-                  {http ? (
-                    <>
-                      <MethodTag>HTTP {http.method}</MethodTag>
-                      {http.rest}
-                    </>
-                  ) : (
-                    event.message
-                  )}
+                <td className="!text-tg-text">
+                  <div className="max-w-md truncate">
+                    {http ? (
+                      <>
+                        <MethodTag>HTTP {http.method}</MethodTag>
+                        {http.rest}
+                      </>
+                    ) : (
+                      event.message
+                    )}
+                  </div>
                 </td>
                 <td className="text-right font-mono !text-tg-text-2">
                   {event.durationMs != null ? Number(event.durationMs).toFixed(0) : "—"}

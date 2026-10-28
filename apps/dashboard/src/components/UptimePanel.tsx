@@ -81,7 +81,9 @@ export function UptimePanel({
                       {m.name}
                     </span>
                   </td>
-                  <td className="max-w-[240px] truncate font-mono !text-tg-text-2">{m.url}</td>
+                  <td className="font-mono !text-tg-text-2">
+                    <div className="max-w-[240px] truncate">{m.url}</div>
+                  </td>
                   <td>
                     {check ? <Pill tone={tone}>{check.status}</Pill> : <span className="text-tg-text-3">—</span>}
                   </td>

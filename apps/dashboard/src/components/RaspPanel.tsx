@@ -75,16 +75,18 @@ export function RaspPanel({ events, onSelectTrace, live }: RaspPanelProps) {
                     </span>
                   </span>
                 </td>
-                <td className="max-w-[260px] truncate">
-                  <MethodTag>{ev.method}</MethodTag>
-                  <span className="font-mono text-tg-text">{ev.path}</span>
+                <td>
+                  <div className="max-w-[260px] truncate">
+                    <MethodTag>{ev.method}</MethodTag>
+                    <span className="font-mono text-tg-text">{ev.path}</span>
+                  </div>
                 </td>
                 <td className="font-mono">
                   <button
                     type="button"
                     title="Abrir detalhe do trace"
                     onClick={() => onSelectTrace?.(ev.traceId)}
-                    className="rounded-sm text-tg-text-3 hover:text-tg-text hover:underline"
+                    className="-mx-1 -my-[11px] inline-block rounded-sm px-1 py-[11px] text-tg-text-3 hover:text-tg-text hover:underline"
                   >
                     {ev.traceId.slice(0, 8)}…
                   </button>
