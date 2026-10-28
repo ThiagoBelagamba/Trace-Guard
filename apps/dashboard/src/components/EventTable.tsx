@@ -1,71 +1,99 @@
 "use client";
 
 import type { DashboardEvent } from "@traceguard/shared";
-import { formatTime, levelBadgeClass, truncateTraceId } from "../lib/format";
+import { formatTime, truncateTraceId } from "../lib/format";
+import { levelTone, parseHttpMessage } from "../lib/view";
+import { LiveIndicator, TableCard } from "./ui/Card";
+import { Pill } from "./ui/Controls";
+import { EmptyState } from "./ui/EmptyState";
 
 interface EventTableProps {
   events: DashboardEvent[];
   onSelectTrace?: (traceId: string) => void;
+  live: boolean;
 }
 
-export function EventTable({ events, onSelectTrace }: EventTableProps) {
+export function MethodTag({ children }: { children: React.ReactNode }) {
+  return (
+    <span className="mr-2 rounded-[5px] border border-[#26262A] bg-tg-surface-3 px-1.5 py-0.5 font-mono text-[11px] text-tg-text-2">
+      {children}
+    </span>
+  );
+}
+
+export function EventTable({ events, onSelectTrace, live }: EventTableProps) {
   if (events.length === 0) {
     return (
-      <div className="rounded-lg border border-surface-border bg-surface-card p-8 text-center text-gray-500">
-        Nenhum evento recebido. Execute <code className="text-emerald-400">pnpm dev:demo</code> para gerar telemetria.
-      </div>
+      <TableCard title="Eventos recentes" meta={<LiveIndicator live={live} />}>
+        <EmptyState>
+          Nenhum evento recebido. Execute <code>pnpm dev:demo</code> para gerar telemetria.
+        </EmptyState>
+      </TableCard>
     );
   }
 
   return (
-    <div className="overflow-hidden rounded-lg border border-surface-border bg-surface-card">
-      <div className="max-h-[420px] overflow-auto">
-        <table className="w-full text-left text-sm">
-          <thead className="sticky top-0 bg-surface-card text-xs uppercase text-gray-500">
-            <tr>
-              <th className="px-4 py-3">Hora</th>
-              <th className="px-4 py-3">Level</th>
-              <th className="px-4 py-3">Service</th>
-              <th className="px-4 py-3">Trace ID</th>
-              <th className="px-4 py-3">Mensagem</th>
-              <th className="px-4 py-3 text-right">ms</th>
-            </tr>
-          </thead>
-          <tbody className="divide-y divide-surface-border">
-            {events.map((event) => (
-              <tr key={event.id} className="hover:bg-white/5">
-                <td className="whitespace-nowrap px-4 py-2 text-gray-400">
-                  {formatTime(event.createdAt)}
-                </td>
-                <td className="px-4 py-2">
-                  <span className={levelBadgeClass(event.level)}>
+    <TableCard
+      title="Eventos recentes"
+      meta={<LiveIndicator live={live} />}
+      bodyClassName="max-h-[420px] overflow-y-auto"
+    >
+      <table className="tg-table min-w-[880px]">
+        <thead className="sticky top-0 z-10">
+          <tr>
+            <th scope="col">Hora</th>
+            <th scope="col">Level</th>
+            <th scope="col">Service</th>
+            <th scope="col">Trace ID</th>
+            <th scope="col">Mensagem</th>
+            <th scope="col" className="text-right">ms</th>
+          </tr>
+        </thead>
+        <tbody>
+          {events.map((event) => {
+            const http = parseHttpMessage(event.message);
+            return (
+              <tr key={event.id}>
+                <td className="font-mono !text-tg-text-2">{formatTime(event.createdAt)}</td>
+                <td>
+                  <Pill tone={levelTone(event.level)} mono>
                     {event.level}
+                  </Pill>
+                </td>
+                <td>
+                  <span className="inline-flex items-center gap-2">
+                    <span aria-hidden="true" className="h-1.5 w-1.5 rounded-sm bg-[#6B6B73]" />
+                    {event.service}
                   </span>
                 </td>
-                <td className="px-4 py-2 text-gray-300">{event.service}</td>
-                <td className="px-4 py-2 font-mono text-xs text-gray-500">
+                <td className="font-mono">
                   <button
                     type="button"
                     title="Abrir detalhe do trace"
                     onClick={() => onSelectTrace?.(event.traceId)}
-                    className="hover:text-emerald-400"
+                    className="rounded-sm text-tg-text-3 hover:text-tg-text hover:underline"
                   >
                     {truncateTraceId(event.traceId)}
                   </button>
                 </td>
-                <td className="max-w-md truncate px-4 py-2 text-gray-200">
-                  {event.message}
+                <td className="max-w-md truncate !text-tg-text">
+                  {http ? (
+                    <>
+                      <MethodTag>HTTP {http.method}</MethodTag>
+                      {http.rest}
+                    </>
+                  ) : (
+                    event.message
+                  )}
                 </td>
-                <td className="px-4 py-2 text-right text-gray-500">
-                  {event.durationMs != null
-                    ? Number(event.durationMs).toFixed(0)
-                    : "—"}
+                <td className="text-right font-mono !text-tg-text-2">
+                  {event.durationMs != null ? Number(event.durationMs).toFixed(0) : "—"}
                 </td>
               </tr>
-            ))}
-          </tbody>
-        </table>
-      </div>
-    </div>
+            );
+          })}
+        </tbody>
+      </table>
+    </TableCard>
   );
 }

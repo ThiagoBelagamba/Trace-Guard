@@ -239,7 +239,11 @@ export function DashboardView() {
               }
             />
             <EventCharts stats={stats} />
-            <EventTable events={filteredEvents} onSelectTrace={setSelectedTraceId} />
+            <EventTable
+              events={filteredEvents}
+              onSelectTrace={setSelectedTraceId}
+              live={connected}
+            />
           </>
         )}
 

@@ -34,7 +34,7 @@ export function LineChartCard({ data, ariaLabel, tooltipName, height = 200, unit
   return (
     <div role="img" aria-label={ariaLabel} style={{ width: "100%", height }}>
       <ResponsiveContainer width="100%" height="100%">
-        <AreaChart data={data} margin={{ top: 8, right: 8, bottom: 0, left: 0 }}>
+        <AreaChart data={data} margin={{ top: 10, right: 28, bottom: 0, left: 0 }}>
           <defs>
             <pattern
               id={patternId}

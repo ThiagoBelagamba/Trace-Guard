@@ -67,23 +67,22 @@ body {
   }
 }
 
-@layer components {
-  /* Pill de status: fundo = cor a 12%, borda = cor a 24% */
-  .tg-pill { display: inline-flex; align-items: center; gap: 6px; font-size: 12px; line-height: 18px; padding: 2px 8px; border-radius: var(--tg-radius-sm); white-space: nowrap; }
-  .tg-pill--error   { color: var(--tg-error-text);  background: rgb(217 119 111 / .12); border: 1px solid rgb(217 119 111 / .24); }
-  .tg-pill--threat  { color: var(--tg-threat-text); background: rgb(169 155 214 / .12); border: 1px solid rgb(169 155 214 / .24); }
-  .tg-pill--warn    { color: var(--tg-warn-text);   background: rgb(212 166 90 / .12);  border: 1px solid rgb(212 166 90 / .26); }
-  .tg-pill--info    { color: var(--tg-info-text);   background: rgb(143 168 214 / .12); border: 1px solid rgb(143 168 214 / .24); }
-  .tg-pill--ok      { color: var(--tg-ok);          background: rgb(127 184 148 / .12); border: 1px solid rgb(127 184 148 / .24); }
-  .tg-pill--neutral { color: var(--tg-text-2);      background: var(--tg-surface-3);    border: 1px solid var(--tg-border-strong); }
-  .tg-pill--level   { font-family: var(--tg-mono); font-size: 11px; font-weight: 500; letter-spacing: .04em; padding: 2px 7px; text-transform: uppercase; }
+/* Classes fora de @layer: não são removidas pelo purge do Tailwind (tons montados dinamicamente). */
+/* Pill de status: fundo = cor a 12%, borda = cor a 24% */
+.tg-pill { display: inline-flex; align-items: center; gap: 6px; font-size: 12px; line-height: 18px; padding: 2px 8px; border-radius: var(--tg-radius-sm); white-space: nowrap; }
+.tg-pill--error   { color: var(--tg-error-text);  background: rgb(217 119 111 / .12); border: 1px solid rgb(217 119 111 / .24); }
+.tg-pill--threat  { color: var(--tg-threat-text); background: rgb(169 155 214 / .12); border: 1px solid rgb(169 155 214 / .24); }
+.tg-pill--warn    { color: var(--tg-warn-text);   background: rgb(212 166 90 / .12);  border: 1px solid rgb(212 166 90 / .26); }
+.tg-pill--info    { color: var(--tg-info-text);   background: rgb(143 168 214 / .12); border: 1px solid rgb(143 168 214 / .24); }
+.tg-pill--ok      { color: var(--tg-ok);          background: rgb(127 184 148 / .12); border: 1px solid rgb(127 184 148 / .24); }
+.tg-pill--neutral { color: var(--tg-text-2);      background: var(--tg-surface-3);    border: 1px solid var(--tg-border-strong); }
+.tg-pill--level   { font-family: var(--tg-mono); font-size: 11px; font-weight: 500; letter-spacing: .04em; padding: 2px 7px; text-transform: uppercase; }
 
-  .tg-hatch { background: var(--tg-hatch); }
+.tg-hatch { background: var(--tg-hatch); }
 
-  /* Tabela dentro de card */
-  .tg-table { width: 100%; border-collapse: collapse; font-size: 13px; text-align: left; }
-  .tg-table th { font-weight: 500; font-size: 12px; color: var(--tg-text-3); padding: 12px 20px; border-bottom: 1px solid var(--tg-border); white-space: nowrap; background: var(--tg-surface); }
-  .tg-table td { padding: 14px 20px; border-bottom: 1px solid var(--tg-border-subtle); white-space: nowrap; color: #D4D4D8; }
-  .tg-table tbody tr:last-child td { border-bottom: none; }
-  .tg-table tbody tr:hover td { background: var(--tg-hover); }
-}
+/* Tabela dentro de card */
+.tg-table { width: 100%; border-collapse: collapse; font-size: 13px; text-align: left; }
+.tg-table th { font-weight: 500; font-size: 12px; color: var(--tg-text-3); padding: 12px 20px; border-bottom: 1px solid var(--tg-border); white-space: nowrap; background: var(--tg-surface); }
+.tg-table td { padding: 14px 20px; border-bottom: 1px solid var(--tg-border-subtle); white-space: nowrap; color: #D4D4D8; }
+.tg-table tbody tr:last-child td { border-bottom: none; }
+.tg-table tbody tr:hover td { background: var(--tg-hover); }
