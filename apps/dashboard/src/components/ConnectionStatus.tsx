@@ -15,10 +15,9 @@ export function ConnectionStatus({
 }: ConnectionStatusProps) {
   return (
     <div
-      role="status"
       className="flex flex-col gap-2.5 rounded-tg-lg border border-tg-border bg-tg-surface p-3.5"
     >
-      <div className="flex items-center gap-2 text-[13px] text-tg-text">
+      <div role="status" className="flex items-center gap-2 text-[13px] text-tg-text">
         <span
           aria-hidden="true"
           className={clsx(

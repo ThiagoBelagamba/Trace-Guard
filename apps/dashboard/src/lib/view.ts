@@ -13,6 +13,17 @@ export function barScale(values: number[]): number {
   return max > 0 ? max * 1.07 : 0;
 }
 
+/**
+ * Tamanho (px) do número dentro da barra vertical, para não ser cortado
+ * quando há muitas barras estreitas ou valores com muitos dígitos.
+ */
+export function barValueFontSize(itemCount: number, maxValue: number): number {
+  const digits = String(Math.max(0, Math.round(maxValue))).length;
+  if (itemCount >= 5) return digits >= 3 ? 14 : 20;
+  if (itemCount >= 4) return digits >= 4 ? 15 : digits === 3 ? 19 : 24;
+  return digits >= 4 ? 20 : 24;
+}
+
 export function parseHttpMessage(
   message: string
 ): { method: string; rest: string } | null {

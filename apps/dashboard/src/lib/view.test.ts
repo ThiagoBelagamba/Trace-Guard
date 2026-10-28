@@ -3,6 +3,7 @@ import { threatLabel } from "./labels";
 import {
   alertSource,
   barScale,
+  barValueFontSize,
   countByLevel,
   levelTone,
   orderLevels,
@@ -78,6 +79,17 @@ describe("tons", () => {
     expect(levelTone("error")).toBe("error");
     expect(levelTone("debug")).toBe("neutral");
   });
+});
+
+describe("barValueFontSize", () => {
+  it("usa o tamanho cheio com poucas barras e números curtos", () =>
+    expect(barValueFontSize(2, 30)).toBe(24));
+  it("reduz com 3 dígitos em 6 barras para caber em ~47px", () =>
+    expect(barValueFontSize(6, 128)).toBeLessThanOrEqual(15));
+  it("reduz com 4 dígitos em 4 barras", () =>
+    expect(barValueFontSize(4, 1234)).toBeLessThanOrEqual(16));
+  it("reduz com 3 dígitos em 4 barras", () =>
+    expect(barValueFontSize(4, 128)).toBeLessThanOrEqual(20));
 });
 
 it("countByLevel conta eventos por nível", () =>

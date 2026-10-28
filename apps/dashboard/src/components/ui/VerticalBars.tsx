@@ -1,5 +1,5 @@
 import clsx from "clsx";
-import { barScale, percentOf, type Tone } from "../../lib/view";
+import { barScale, barValueFontSize, percentOf, type Tone } from "../../lib/view";
 import { BAR_TONES } from "./tones";
 
 export interface BarItem {
@@ -21,6 +21,7 @@ export function VerticalBars({ items, ariaLabel, height = 250, monoLabels = fals
   const scale = barScale(items.map((i) => i.value));
   const total = items.reduce((acc, i) => acc + i.value, 0);
   const dense = items.length >= 5;
+  const valueSize = barValueFontSize(items.length, Math.max(0, ...items.map((i) => i.value)));
 
   return (
     <div role="img" aria-label={ariaLabel} className={clsx("flex", dense ? "gap-2" : "gap-3")} style={{ height }}>
@@ -34,7 +35,7 @@ export function VerticalBars({ items, ariaLabel, height = 250, monoLabels = fals
                 <div
                   className={clsx(
                     "absolute inset-x-0 bottom-0 flex flex-col justify-between rounded-[9px] border-t",
-                    dense ? "p-2.5" : "p-3.5"
+                    dense ? "p-2" : "p-3.5"
                   )}
                   style={{
                     height: `${pct}%`,
@@ -44,8 +45,8 @@ export function VerticalBars({ items, ariaLabel, height = 250, monoLabels = fals
                   }}
                 >
                   <span
-                    className={clsx("font-semibold leading-none tracking-[-0.02em]", dense ? "text-xl" : "text-2xl")}
-                    style={{ color: tone.value }}
+                    className="font-semibold tabular-nums leading-none tracking-[-0.02em]"
+                    style={{ color: tone.value, fontSize: valueSize }}
                   >
                     {item.value}
                   </span>
