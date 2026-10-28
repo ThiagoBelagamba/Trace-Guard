@@ -24,6 +24,20 @@ export function barValueFontSize(itemCount: number, maxValue: number): number {
   return digits >= 4 ? 20 : 24;
 }
 
+/**
+ * Topo do eixo Y dos gráficos de linha: 15% de folga para o último ponto não ser cortado,
+ * arredondado a múltiplo de 4 para gerar 5 marcas inteiras igualmente espaçadas.
+ */
+export function chartYMax(dataMax: number): number {
+  if (dataMax <= 0) return 4;
+  return Math.ceil((dataMax * 1.15) / 4) * 4;
+}
+
+export function activeMonitorsLabel(monitors: Array<{ enabled: boolean }>): string {
+  const active = monitors.filter((m) => m.enabled).length;
+  return `${active} de ${monitors.length} ativos`;
+}
+
 export function parseHttpMessage(
   message: string
 ): { method: string; rest: string } | null {

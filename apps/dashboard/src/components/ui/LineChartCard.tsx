@@ -10,6 +10,7 @@ import {
   XAxis,
   YAxis,
 } from "recharts";
+import { chartYMax } from "../../lib/view";
 
 export interface LinePoint {
   label: string;
@@ -30,6 +31,8 @@ const AXIS_TICK = { fill: "#85858D", fontSize: 11, fontFamily: "var(--tg-mono)" 
 export function LineChartCard({ data, ariaLabel, tooltipName, height = 200, unit }: LineChartCardProps) {
   const patternId = `hatch-${useId().replace(/:/g, "")}`;
   const lastIndex = data.length - 1;
+  const yMax = chartYMax(data.reduce((acc, d) => Math.max(acc, d.value), 0));
+  const yTicks = [0, 1, 2, 3, 4].map((i) => (yMax * i) / 4);
 
   return (
     <div role="img" aria-label={ariaLabel} style={{ width: "100%", height }}>
@@ -59,6 +62,8 @@ export function LineChartCard({ data, ariaLabel, tooltipName, height = 200, unit
             tickLine={false}
             axisLine={false}
             allowDecimals={false}
+            domain={[0, yMax]}
+            ticks={yTicks}
             width={44}
             unit={unit}
           />

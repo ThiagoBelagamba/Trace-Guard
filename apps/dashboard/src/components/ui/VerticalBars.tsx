@@ -31,6 +31,22 @@ export function VerticalBars({ items, ariaLabel, height = 250, monoLabels = fals
         return (
           <div key={item.key} className="flex min-w-0 flex-1 flex-col gap-2.5">
             <div className="tg-hatch relative flex-1 overflow-hidden rounded-[10px] border border-[#1F1F23]">
+              {item.value === 0 && total > 0 && (
+                <div
+                  className={clsx(
+                    "absolute inset-x-0 bottom-0 flex flex-col gap-1.5",
+                    dense ? "p-2" : "p-3.5"
+                  )}
+                >
+                  <span
+                    className="font-semibold tabular-nums leading-none tracking-[-0.02em] text-tg-text-3"
+                    style={{ fontSize: valueSize }}
+                  >
+                    0
+                  </span>
+                  <span className="font-mono text-xs text-tg-text-3">0%</span>
+                </div>
+              )}
               {item.value > 0 && (
                 <div
                   className={clsx(

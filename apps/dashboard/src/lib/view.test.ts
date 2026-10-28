@@ -4,6 +4,8 @@ import {
   alertSource,
   barScale,
   barValueFontSize,
+  chartYMax,
+  activeMonitorsLabel,
   countByLevel,
   levelTone,
   orderLevels,
@@ -101,4 +103,23 @@ it("countByLevel conta eventos por nível", () =>
 it("threatLabel traduz e cai no próprio tipo", () => {
   expect(threatLabel("sequential_scan")).toBe("Varredura");
   expect(threatLabel("novo_tipo")).toBe("novo_tipo");
+});
+
+describe("chartYMax", () => {
+  it("dá folga e arredonda para múltiplo de 4 (5 marcas inteiras)", () => expect(chartYMax(15)).toBe(20));
+  it("valor exato no topo ganha folga", () => expect(chartYMax(20)).toBe(24));
+  it("valores pequenos", () => expect(chartYMax(2)).toBe(4));
+  it("sem dados vira 4", () => {
+    expect(chartYMax(0)).toBe(4);
+    expect(chartYMax(-3)).toBe(4);
+  });
+});
+
+describe("activeMonitorsLabel", () => {
+  it("conta ativos sobre o total", () =>
+    expect(
+      activeMonitorsLabel([{ enabled: true }, { enabled: false }, { enabled: true }])
+    ).toBe("2 de 3 ativos"));
+  it("todos pausados", () => expect(activeMonitorsLabel([{ enabled: false }])).toBe("0 de 1 ativos"));
+  it("lista vazia", () => expect(activeMonitorsLabel([])).toBe("0 de 0 ativos"));
 });
