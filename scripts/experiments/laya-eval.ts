@@ -1,16 +1,29 @@
 /**
  * Experimento 4 — Laya (sidecar em modo sombra)
  *
- * 4.1 Acurácia: dataset rotulado direto no sidecar, com o mesmo limiar e as
- *     mesmas perguntas do SDK (inspectPayloadWithLaya).
+ * 4.1 Acurácia: dataset rotulado direto no sidecar, com o mesmo payload
+ *     ({"message": texto}), limiar e perguntas do SDK (inspectPayloadWithLaya).
  * 4.2 Latência do modelo em /v1/systemone.
+ * 4.3 Custo no caminho quente: o script sobe a demo-api duas vezes (sem e com
+ *     LAYA_SIDECAR_URL) e mede POST /api/chat.
+ * 4.4 Integração: cada texto vai com traceparent próprio e o evento é
+ *     conferido em /api/v1/rasp/events pelo mesmo traceId.
+ *
+ * Usa http.request (não fetch) na demo-api para controlar os cabeçalhos, e um
+ * X-Forwarded-For único por requisição para o rate limit do RASP não interferir.
  *
  * Requer: sidecar Laya (docker compose --profile laya up -d --build laya)
  * e backend (pnpm dev:backend).
  *
  * Uso: pnpm experiment:laya
  */
+import { spawn, type ChildProcess } from "node:child_process";
+import { randomBytes } from "node:crypto";
+import { existsSync } from "node:fs";
+import http from "node:http";
+import path from "node:path";
 import type { ClassificationMetrics } from "../../packages/shared/src/metrics.ts";
+import type { RaspEvent } from "../../packages/shared/src/rasp.ts";
 import {
   inspectPayloadWithLaya,
   LAYA_NOUL_THRESHOLD,
@@ -20,16 +33,24 @@ import { LAYA_DATASET } from "./laya-dataset.ts";
 import {
   buildAccuracyReport,
   majorityVerdict,
+  matchDeliveries,
   summarizeLatency,
   type CaseVerdict,
   type LatencySummary,
+  type SentCase,
 } from "./laya-stats.ts";
 
 const LAYA_URL = (process.env.LAYA_SIDECAR_URL ?? "http://localhost:8000").replace(/\/$/, "");
 const LAYA_API_KEY = process.env.LAYA_API_KEY ?? "traceguard-secret";
 const API_URL = (process.env.API_URL ?? "http://localhost:3001").replace(/\/$/, "");
+const API_KEY = process.env.API_KEY;
+const DEMO_PORT = parseInt(process.env.EXPERIMENT_DEMO_PORT ?? "4100", 10);
 const REPS = 3;
 const SIDECAR_WARMUP = 3;
+const DEMO_WARMUP = 10;
+const DEMO_ENTRY = path.join("apps", "demo-api", "src", "index.ts");
+const BROWSER_UA =
+  "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 Chrome/120.0.0.0";
 
 async function assertReachable(url: string, hint: string): Promise<void> {
   try {
@@ -39,8 +60,12 @@ async function assertReachable(url: string, hint: string): Promise<void> {
   }
 }
 
+/**
+ * Classifica o texto como o SDK o envia em POST /api/chat: o sombra serializa
+ * req.body inteiro, então o sidecar vê {"message":"..."} e não o texto cru.
+ */
 function inspect(text: string): Promise<LayaInspectionResult | null> {
-  return inspectPayloadWithLaya(text, LAYA_URL, LAYA_API_KEY);
+  return inspectPayloadWithLaya(JSON.stringify({ message: text }), LAYA_URL, LAYA_API_KEY);
 }
 
 /**
@@ -161,6 +186,201 @@ function printAccuracy(
 Roteamento do sidecar (chamadas por checkpoint): ${routing || "—"}`);
 }
 
+// ── Demo-api como processo filho ───────────────────────────────────────
+
+const sleep = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
+
+async function startDemoApi(withLaya: boolean): Promise<{ stop(): Promise<void> }> {
+  if (!existsSync(DEMO_ENTRY)) {
+    throw new Error(`${DEMO_ENTRY} não encontrado. Rode pela raiz do repo: pnpm experiment:laya`);
+  }
+
+  const env: NodeJS.ProcessEnv = {
+    ...process.env,
+    PORT: String(DEMO_PORT),
+    RASP_MODE: "monitor",
+    TRACEGUARD_ENDPOINT: `${API_URL}/api/v1/ingest`,
+  };
+  if (withLaya) {
+    env.LAYA_SIDECAR_URL = LAYA_URL;
+    env.LAYA_API_KEY = LAYA_API_KEY;
+  } else {
+    delete env.LAYA_SIDECAR_URL;
+    delete env.LAYA_API_KEY;
+  }
+
+  const child: ChildProcess = spawn(process.execPath, ["--import", "tsx", DEMO_ENTRY], {
+    env,
+    stdio: ["ignore", "ignore", "pipe"],
+  });
+  let stderr = "";
+  child.stderr?.on("data", (chunk: Buffer) => {
+    stderr = (stderr + chunk.toString()).slice(-2_000);
+  });
+  const exited = new Promise<void>((resolve) => child.once("exit", () => resolve()));
+
+  const stop = async () => {
+    if (child.exitCode === null && child.signalCode === null) child.kill();
+    await exited;
+  };
+
+  const deadline = Date.now() + 30_000;
+  while (Date.now() < deadline && child.exitCode === null) {
+    try {
+      const res = await fetch(`http://localhost:${DEMO_PORT}/health`, {
+        signal: AbortSignal.timeout(1_000),
+      });
+      if (res.ok) return { stop };
+    } catch {
+      // ainda subindo
+    }
+    await sleep(250);
+  }
+
+  await stop();
+  const tail = stderr.trim() ? `\n${stderr.trim()}` : "";
+  throw new Error(
+    `demo-api não respondeu em :${DEMO_PORT}/health. Rode pnpm build (a demo-api usa o dist do SDK) ou troque EXPERIMENT_DEMO_PORT.${tail}`
+  );
+}
+
+let forwardedCounter = 0;
+
+function nextForwardedFor(): string {
+  forwardedCounter += 1;
+  const n = forwardedCounter;
+  return `10.${(n >> 16) & 255}.${(n >> 8) & 255}.${n & 255}`;
+}
+
+function newTraceparent(): { traceId: string; header: string } {
+  const traceId = randomBytes(16).toString("hex");
+  const spanId = randomBytes(8).toString("hex");
+  return { traceId, header: `00-${traceId}-${spanId}-01` };
+}
+
+function postChat(
+  message: string,
+  opts: { traceparent?: string } = {}
+): Promise<{ status: number; ms: number }> {
+  const body = JSON.stringify({ message });
+  return new Promise((resolve, reject) => {
+    const started = performance.now();
+    const req = http.request(
+      {
+        hostname: "localhost",
+        port: DEMO_PORT,
+        path: "/api/chat",
+        method: "POST",
+        headers: {
+          "User-Agent": BROWSER_UA,
+          Accept: "application/json",
+          "Accept-Language": "pt-BR,pt;q=0.9",
+          "Content-Type": "application/json",
+          "Content-Length": Buffer.byteLength(body),
+          "X-Forwarded-For": nextForwardedFor(),
+          ...(opts.traceparent ? { traceparent: opts.traceparent } : {}),
+        },
+      },
+      (res) => {
+        res.resume();
+        res.on("end", () => {
+          const ms = performance.now() - started;
+          if (res.statusCode !== 200) {
+            reject(new Error(`POST /api/chat respondeu HTTP ${res.statusCode}`));
+            return;
+          }
+          resolve({ status: res.statusCode, ms });
+        });
+      }
+    );
+    req.on("error", reject);
+    req.end(body);
+  });
+}
+
+async function measureHotPath(): Promise<number[]> {
+  for (let i = 0; i < DEMO_WARMUP; i++) {
+    await postChat(LAYA_DATASET[i % LAYA_DATASET.length]!.text);
+  }
+  const samples: number[] = [];
+  for (const item of LAYA_DATASET) {
+    for (let rep = 0; rep < REPS; rep++) {
+      samples.push((await postChat(item.text)).ms);
+    }
+  }
+  return samples;
+}
+
+function signed(value: number): string {
+  return `${value >= 0 ? "+" : ""}${value.toFixed(1)}`;
+}
+
+function printHotPath(without: LatencySummary, withLaya: LatencySummary): void {
+  console.log("\n### 4.3 Custo no caminho quente\n");
+  console.log(
+    `Amostras por rodada: ${LAYA_DATASET.length * REPS} (+${DEMO_WARMUP} de aquecimento descartadas) · demo-api em :${DEMO_PORT}, RASP_MODE=monitor\n`
+  );
+  console.log("| Alvo | média (ms) | p50 (ms) | p95 (ms) |");
+  console.log("|---|---:|---:|---:|");
+  printLatencyRow("POST /api/chat sem sidecar", without);
+  printLatencyRow("POST /api/chat com sidecar", withLaya);
+  console.log(
+    `\nDiferença com − sem: p50 ${signed(withLaya.p50 - without.p50)} ms · p95 ${signed(withLaya.p95 - without.p95)} ms`
+  );
+  console.log(
+    "\nNa rodada com sidecar as inspeções rodam em paralelo com as respostas (até 4 em voo), então a disputa de CPU com o sidecar na mesma máquina entra na medição."
+  );
+}
+
+async function fetchRaspEvents(): Promise<RaspEvent[]> {
+  const res = await fetch(`${API_URL}/api/v1/rasp/events?limit=100`, {
+    headers: API_KEY ? { "x-api-key": API_KEY } : {},
+  });
+  if (!res.ok) throw new Error(`GET /api/v1/rasp/events respondeu HTTP ${res.status}`);
+  const data = (await res.json()) as { events: RaspEvent[] };
+  return data.events;
+}
+
+async function runIntegrationStage(
+  verdicts: Map<string, CaseVerdict | null>,
+  modelLatency: LatencySummary
+): Promise<void> {
+  const pacingMs = Math.max(100, Math.ceil(modelLatency.p95));
+  const sent: SentCase[] = [];
+
+  for (const item of LAYA_DATASET) {
+    const verdict = verdicts.get(item.id) ?? null;
+    const { traceId, header } = newTraceparent();
+    const record: SentCase = { caseId: item.id, traceId, sentAt: Date.now() };
+    if (verdict?.flagged && verdict.threatType) record.expectedThreatType = verdict.threatType;
+    sent.push(record);
+    await postChat(item.text, { traceparent: header });
+    await sleep(pacingMs);
+  }
+
+  await sleep(Math.ceil(modelLatency.p95) + 3_000);
+  const report = matchDeliveries(sent, await fetchRaspEvents());
+  const delay = summarizeLatency(report.delaysMs);
+
+  console.log("\n### 4.4 Integração por traceId\n");
+  console.log(
+    `Cada texto enviado uma vez com traceparent próprio · intervalo entre envios: ${pacingMs} ms (p95 do modelo)\n`
+  );
+  console.log("| Métrica | Valor |");
+  console.log("|---|---:|");
+  console.log(`| Esperados (marcados na 4.1) | ${report.expected} |`);
+  console.log(`| Entregues com traceId correto | ${report.delivered} |`);
+  console.log(`| Perdidos (fila, timeout ou flush) | ${report.lost} |`);
+  console.log(`| Tipo divergente da 4.1 | ${report.typeMismatch} |`);
+  console.log(`| Eventos inesperados | ${report.unexpected} |`);
+  console.log(`| Taxa de entrega | ${pct(report.deliveryRate)} |`);
+  console.log(`| Atraso do sombra, média (ms) | ${delay.avg.toFixed(0)} |`);
+  console.log(`| Atraso do sombra, p95 (ms) | ${delay.p95.toFixed(0)} |`);
+  if (report.lostCaseIds.length > 0) {
+    console.log(`\nPerdidos: ${report.lostCaseIds.join(", ")}`);
+  }
+}
+
 async function main(): Promise<void> {
   await assertReachable(
     `${LAYA_URL}/health`,
@@ -178,6 +398,29 @@ async function main(): Promise<void> {
 
   const { verdicts, modelLatency, models } = await runAccuracyStage();
   printAccuracy(verdicts, modelLatency, models);
+
+  const withoutDemo = await startDemoApi(false);
+  let withoutSamples: number[];
+  try {
+    withoutSamples = await measureHotPath();
+  } finally {
+    await withoutDemo.stop();
+  }
+
+  const withDemo = await startDemoApi(true);
+  try {
+    const withSamples = await measureHotPath();
+    printHotPath(summarizeLatency(withoutSamples), summarizeLatency(withSamples));
+    // A rodada anterior deixa inspeções em voo; espera a fila esvaziar antes de medir a entrega.
+    await sleep(Math.ceil(modelLatency.p95) * 4);
+    await runIntegrationStage(verdicts, modelLatency);
+  } finally {
+    await withDemo.stop();
+  }
+
+  console.log(
+    "\nDocumente o hardware (CPU/RAM) na monografia. A acurácia vale para este dataset controlado; não generalize como desempenho em produção."
+  );
 }
 
 main().catch((error) => {

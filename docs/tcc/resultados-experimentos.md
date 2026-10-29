@@ -56,3 +56,57 @@ Comando: `pnpm experiment:overhead`. 80 amostras.
 | POST /api/v1/ingest | 2.0 | 1.8 | 3.2 |
 
 p95 do ingest (3.2 ms) está muito abaixo do alvo de 500 ms do k6. Documente CPU/RAM na monografia.
+
+### Experimento 4 — Laya (sidecar em modo sombra)
+
+Pré-requisitos: `pnpm build` (a demo-api usa o `dist` do SDK), `docker compose --profile laya up -d --build laya` e `pnpm dev:backend`.
+
+Comando: `pnpm experiment:laya`. Dataset rotulado em `scripts/experiments/laya-dataset.ts`: 40 textos (12 prompt injection, 10 credenciais fictícias, 18 legítimos, sendo 10 difíceis), metade em PT-BR e metade em EN.
+
+Protocolo:
+
+1. **4.1 Acurácia:** cada texto vai 3 vezes direto ao sidecar, com o mesmo payload (`{"message": texto}`), as mesmas perguntas e o mesmo limiar do SDK (`noul ≥ 0.80`, sem abstenção). O veredito é a maioria das 3 execuções. Falha de transporte fica fora das métricas e é contada à parte.
+2. **4.2 Latência do modelo:** p50/p95 de `POST /v1/systemone`. Antes de medir, o aquecimento passa por PT e EN, porque o sidecar baixa sob demanda o checkpoint de cada idioma.
+3. **4.3 Custo no caminho quente:** o script sobe a demo-api duas vezes na porta 4100 (`RASP_MODE=monitor`), primeiro sem e depois com `LAYA_SIDECAR_URL`, e mede `POST /api/chat` (40 × 3 amostras, mais 10 de aquecimento).
+4. **4.4 Integração por traceId:** cada texto vai uma vez com `traceparent` gerado pelo script, em intervalos de pelo menos o p95 do modelo. O script confere em `/api/v1/rasp/events` se cada texto marcado na 4.1 chegou com o mesmo `traceId`.
+
+**4.1 Acurácia (binário: ameaça vs. legítimo)**
+
+| Métrica | Valor |
+|---|---:|
+| Precisão | — |
+| Recall | — |
+| F1 | — |
+| Youden | — |
+
+| Métrica | prompt_injection | secret_leak |
+|---|---:|---:|
+| Precisão | — | — |
+| Recall | — | — |
+| F1 | — | — |
+
+Falsos positivos em legítimos difíceis: — · recall PT: — · recall EN: —
+
+**4.2 Latência do modelo**
+
+| Alvo | média (ms) | p50 (ms) | p95 (ms) |
+|---|---:|---:|---:|
+| Laya /v1/systemone | — | — | — |
+
+**4.3 Custo no caminho quente**
+
+| Alvo | média (ms) | p50 (ms) | p95 (ms) |
+|---|---:|---:|---:|
+| POST /api/chat sem sidecar | — | — | — |
+| POST /api/chat com sidecar | — | — | — |
+
+**4.4 Integração por traceId**
+
+| Métrica | Valor |
+|---|---:|
+| Esperados | — |
+| Entregues com traceId correto | — |
+| Taxa de entrega | — |
+| Atraso do sombra, p95 (ms) | — |
+
+**Leitura:** preencher após a execução oficial.

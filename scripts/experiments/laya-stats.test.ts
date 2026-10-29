@@ -148,6 +148,19 @@ describe("matchDeliveries", () => {
       deliveryRate: 1,
     });
     expect(report.delaysMs[0]).toBe(250);
+    expect(report.lostCaseIds).toEqual([]);
+  });
+
+  it("names the expected cases that never arrived", () => {
+    const sent: SentCase[] = [
+      { caseId: "a", traceId: "a".repeat(32), sentAt: 0, expectedThreatType: "prompt_injection" },
+      { caseId: "b", traceId: "b".repeat(32), sentAt: 0, expectedThreatType: "secret_leak" },
+    ];
+    const report = matchDeliveries(sent, [
+      event("a".repeat(32), "prompt_injection", "1970-01-01T00:00:00.100Z", "laya"),
+    ]);
+    expect(report.lost).toBe(1);
+    expect(report.lostCaseIds).toEqual(["b"]);
   });
 
   it("reports a zero delivery rate when nothing was expected", () => {

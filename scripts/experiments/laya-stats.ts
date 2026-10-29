@@ -142,6 +142,7 @@ export interface DeliveryReport {
   unexpected: number;
   deliveryRate: number;
   delaysMs: number[];
+  lostCaseIds: string[];
 }
 
 export function matchDeliveries(sent: SentCase[], events: RaspEvent[]): DeliveryReport {
@@ -156,9 +157,13 @@ export function matchDeliveries(sent: SentCase[], events: RaspEvent[]): Delivery
   let delivered = 0;
   let typeMismatch = 0;
   const delaysMs: number[] = [];
+  const lostCaseIds: string[] = [];
   for (const s of expected) {
     const ev = firstLayaEvent.get(s.traceId);
-    if (!ev) continue;
+    if (!ev) {
+      lostCaseIds.push(s.caseId);
+      continue;
+    }
     delivered += 1;
     if (ev.threatType !== s.expectedThreatType) typeMismatch += 1;
     delaysMs.push(Date.parse(ev.timestamp) - s.sentAt);
@@ -174,5 +179,6 @@ export function matchDeliveries(sent: SentCase[], events: RaspEvent[]): Delivery
     unexpected,
     deliveryRate: expected.length === 0 ? 0 : delivered / expected.length,
     delaysMs,
+    lostCaseIds,
   };
 }
