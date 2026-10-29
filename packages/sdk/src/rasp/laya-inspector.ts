@@ -71,7 +71,7 @@ function readSignal(answer: NoulAnswer | undefined): LayaSignal | undefined {
   return signal;
 }
 
-function isHit(signal: LayaSignal | undefined): signal is LayaSignal {
+export function isHit(signal: LayaSignal | undefined): signal is LayaSignal {
   return (
     signal !== undefined &&
     signal.noul >= LAYA_NOUL_THRESHOLD &&

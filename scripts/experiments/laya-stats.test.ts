@@ -1,0 +1,156 @@
+import { describe, expect, it } from "vitest";
+import type { RaspEvent } from "../../packages/shared/src/rasp.ts";
+import type { LayaInspectionResult } from "../../packages/sdk/src/rasp/laya-inspector.ts";
+import type { LayaCase } from "./laya-dataset.ts";
+import {
+  buildAccuracyReport,
+  majorityVerdict,
+  matchDeliveries,
+  summarizeLatency,
+  type CaseVerdict,
+  type SentCase,
+} from "./laya-stats.ts";
+
+function run(pi: number, sl: number, abstained = false): LayaInspectionResult {
+  const abstention = abstained ? "abstained" : undefined;
+  return {
+    flagged: pi >= 0.8 || sl >= 0.8,
+    score: 0,
+    reasons: [],
+    modelUsed: "multilingual",
+    latencyMs: 10,
+    signals: {
+      prompt_injection: { noul: pi, ...(abstention ? { abstention } : {}) },
+      secret_leak: { noul: sl, ...(abstention ? { abstention } : {}) },
+    },
+  };
+}
+
+function item(id: string, label: LayaCase["label"], lang: LayaCase["lang"], hard = false): LayaCase {
+  return { id, label, lang, hard, category: "test", text: id };
+}
+
+function verdict(flagged: boolean, piHit = false, slHit = false): CaseVerdict {
+  return {
+    flagged,
+    piHit,
+    slHit,
+    piNoul: null,
+    slNoul: null,
+    validRuns: 3,
+    stable: true,
+  };
+}
+
+function event(traceId: string, threatType: RaspEvent["threatType"], timestamp: string, source?: string): RaspEvent {
+  return {
+    traceId,
+    spanId: "s".repeat(16),
+    service: "demo-api",
+    threatType,
+    action: "logged",
+    clientIp: "10.0.0.1",
+    path: "/api/chat",
+    method: "POST",
+    score: 90,
+    metadata: source ? { source } : {},
+    timestamp,
+  };
+}
+
+describe("summarizeLatency", () => {
+  it("computes avg, p50 and p95 with the overhead.ts percentile", () => {
+    expect(summarizeLatency([5, 1, 3, 2, 4])).toEqual({ avg: 3, p50: 3, p95: 5 });
+  });
+
+  it("returns zeros for no samples", () => {
+    expect(summarizeLatency([])).toEqual({ avg: 0, p50: 0, p95: 0 });
+  });
+});
+
+describe("majorityVerdict", () => {
+  it("returns null when every run failed", () => {
+    expect(majorityVerdict([null, null, null])).toBeNull();
+  });
+
+  it("takes the majority and the median noul", () => {
+    expect(majorityVerdict([run(0.9, 0.1), run(0.85, 0.1), run(0.2, 0.1)])).toMatchObject({
+      flagged: true,
+      piHit: true,
+      slHit: false,
+      threatType: "prompt_injection",
+      piNoul: 0.85,
+      validRuns: 3,
+      stable: false,
+    });
+  });
+
+  it("treats a tie between two valid runs as not flagged and unstable", () => {
+    expect(majorityVerdict([run(0.9, 0), null, run(0.1, 0)])).toMatchObject({
+      flagged: false,
+      stable: false,
+      validRuns: 2,
+    });
+  });
+
+  it("does not count abstained signals as hits", () => {
+    const result = majorityVerdict([run(0.95, 0, true), run(0.95, 0, true), run(0.95, 0, true)]);
+    expect(result?.piHit).toBe(false);
+  });
+
+  it("picks the threat type with the higher median noul", () => {
+    const result = majorityVerdict([run(0.82, 0.97), run(0.82, 0.97), run(0.82, 0.97)]);
+    expect(result?.threatType).toBe("secret_leak");
+  });
+});
+
+describe("buildAccuracyReport", () => {
+  it("excludes transport errors and splits metrics by type, hard cases and language", () => {
+    const report = buildAccuracyReport([
+      { item: item("pi", "prompt_injection", "pt"), verdict: verdict(true, true) },
+      { item: item("sl", "secret_leak", "en"), verdict: verdict(false) },
+      { item: item("hard", "benign", "pt", true), verdict: verdict(true, true) },
+      { item: item("easy", "benign", "en"), verdict: verdict(false) },
+      { item: item("err", "prompt_injection", "en"), verdict: null },
+    ]);
+
+    expect(report.evaluated).toBe(4);
+    expect(report.transportErrors).toBe(1);
+    expect(report.binary).toMatchObject({ tp: 1, fn: 1, fp: 1, tn: 1 });
+    expect(report.hardBenign).toEqual({ total: 1, falsePositives: 1 });
+    expect(report.recallByLang).toEqual({ pt: 1, en: 0 });
+  });
+});
+
+describe("matchDeliveries", () => {
+  it("matches laya events by traceId and ignores foreign or heuristic events", () => {
+    const sent: SentCase[] = [
+      { caseId: "a", traceId: "a".repeat(32), sentAt: Date.parse("2026-10-28T10:00:00.000Z"), expectedThreatType: "prompt_injection" },
+      { caseId: "b", traceId: "b".repeat(32), sentAt: Date.parse("2026-10-28T10:00:01.000Z"), expectedThreatType: "secret_leak" },
+      { caseId: "c", traceId: "c".repeat(32), sentAt: Date.parse("2026-10-28T10:00:02.000Z") },
+    ];
+    const events = [
+      event("a".repeat(32), "prompt_injection", "2026-10-28T10:00:00.250Z", "laya"),
+      event("b".repeat(32), "prompt_injection", "2026-10-28T10:00:01.300Z", "laya"),
+      event("c".repeat(32), "prompt_injection", "2026-10-28T10:00:02.300Z", "laya"),
+      event("f".repeat(32), "prompt_injection", "2026-10-28T10:00:03.000Z", "laya"),
+      event("b".repeat(32), "bot_user_agent", "2026-10-28T10:00:01.010Z"),
+    ];
+
+    const report = matchDeliveries(sent, events);
+
+    expect(report).toMatchObject({
+      expected: 2,
+      delivered: 2,
+      typeMismatch: 1,
+      unexpected: 1,
+      lost: 0,
+      deliveryRate: 1,
+    });
+    expect(report.delaysMs[0]).toBe(250);
+  });
+
+  it("reports a zero delivery rate when nothing was expected", () => {
+    expect(matchDeliveries([], []).deliveryRate).toBe(0);
+  });
+});
