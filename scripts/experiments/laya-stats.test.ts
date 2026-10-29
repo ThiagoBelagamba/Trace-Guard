@@ -38,6 +38,7 @@ function verdict(flagged: boolean, piHit = false, slHit = false): CaseVerdict {
     piNoul: null,
     slNoul: null,
     validRuns: 3,
+    totalRuns: 3,
     stable: true,
   };
 }
@@ -119,6 +120,19 @@ describe("buildAccuracyReport", () => {
     expect(report.binary).toMatchObject({ tp: 1, fn: 1, fp: 1, tn: 1 });
     expect(report.hardBenign).toEqual({ total: 1, falsePositives: 1 });
     expect(report.recallByLang).toEqual({ pt: 1, en: 0 });
+  });
+
+  it("counts failed calls and texts decided on fewer runs than requested", () => {
+    const partial = majorityVerdict([run(0.9, 0), null, run(0.9, 0)]);
+    const full = majorityVerdict([run(0.1, 0), run(0.1, 0), run(0.1, 0)]);
+    expect(partial).toMatchObject({ validRuns: 2, totalRuns: 3 });
+
+    const report = buildAccuracyReport([
+      { item: item("partial", "prompt_injection", "pt"), verdict: partial },
+      { item: item("full", "benign", "en"), verdict: full },
+      { item: item("err", "benign", "pt"), verdict: null },
+    ]);
+    expect(report.partialTexts).toBe(1);
   });
 });
 

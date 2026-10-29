@@ -42,6 +42,7 @@ export interface CaseVerdict {
   piNoul: number | null;
   slNoul: number | null;
   validRuns: number;
+  totalRuns: number;
   stable: boolean;
 }
 
@@ -78,6 +79,7 @@ export function majorityVerdict(runs: (LayaInspectionResult | null)[]): CaseVerd
     piNoul,
     slNoul,
     validRuns: valid.length,
+    totalRuns: runs.length,
     stable: flaggedCount === 0 || flaggedCount === valid.length,
   };
   if (hits[0]) verdict.threatType = hits[0].type;
@@ -93,6 +95,8 @@ export interface AccuracyReport {
   hardBenign: { total: number; falsePositives: number };
   recallByLang: { pt: number; en: number };
   unstable: number;
+  /** Textos decididos com menos execuções válidas do que as pedidas (timeouts parciais). */
+  partialTexts: number;
 }
 
 function recallFor(rows: { item: LayaCase; verdict: CaseVerdict }[], lang: LayaCase["lang"]): number {
@@ -124,6 +128,7 @@ export function buildAccuracyReport(
     hardBenign: { total: hard.length, falsePositives: hard.filter((r) => r.verdict.flagged).length },
     recallByLang: { pt: recallFor(evaluated, "pt"), en: recallFor(evaluated, "en") },
     unstable: evaluated.filter((r) => !r.verdict.stable).length,
+    partialTexts: evaluated.filter((r) => r.verdict.validRuns < r.verdict.totalRuns).length,
   };
 }
 

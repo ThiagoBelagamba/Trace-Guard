@@ -21,6 +21,7 @@ import { spawn, type ChildProcess } from "node:child_process";
 import { randomBytes } from "node:crypto";
 import { existsSync } from "node:fs";
 import http from "node:http";
+import net from "node:net";
 import path from "node:path";
 import type { ClassificationMetrics } from "../../packages/shared/src/metrics.ts";
 import type { RaspEvent } from "../../packages/shared/src/rasp.ts";
@@ -36,6 +37,7 @@ import {
   matchDeliveries,
   summarizeLatency,
   type CaseVerdict,
+  type DeliveryReport,
   type LatencySummary,
   type SentCase,
 } from "./laya-stats.ts";
@@ -94,10 +96,12 @@ async function runAccuracyStage(): Promise<{
   verdicts: Map<string, CaseVerdict | null>;
   modelLatency: LatencySummary;
   models: Map<string, number>;
+  failedCalls: number;
 }> {
   const verdicts = new Map<string, CaseVerdict | null>();
   const latencies: number[] = [];
   const models = new Map<string, number>();
+  let failedCalls = 0;
 
   for (const item of LAYA_DATASET) {
     const runs: (LayaInspectionResult | null)[] = [];
@@ -106,13 +110,15 @@ async function runAccuracyStage(): Promise<{
       if (result) {
         latencies.push(result.latencyMs);
         models.set(result.modelUsed, (models.get(result.modelUsed) ?? 0) + 1);
+      } else {
+        failedCalls += 1;
       }
       runs.push(result);
     }
     verdicts.set(item.id, majorityVerdict(runs));
   }
 
-  return { verdicts, modelLatency: summarizeLatency(latencies), models };
+  return { verdicts, modelLatency: summarizeLatency(latencies), models, failedCalls };
 }
 
 function fmtNoul(value: number | null): string {
@@ -150,7 +156,8 @@ function printLatencyRow(label: string, s: LatencySummary): void {
 function printAccuracy(
   verdicts: Map<string, CaseVerdict | null>,
   modelLatency: LatencySummary,
-  models: Map<string, number>
+  models: Map<string, number>,
+  failedCalls: number
 ): void {
   console.log("### 4.1 Acurácia\n");
   console.log("| Caso | Idioma | Rótulo | Difícil | Veredito | noul PI | noul SL |");
@@ -174,25 +181,51 @@ function printAccuracy(
     `\nFalsos positivos em legítimos difíceis: ${report.hardBenign.falsePositives}/${report.hardBenign.total} · ` +
       `recall PT ${pct(report.recallByLang.pt)} · recall EN ${pct(report.recallByLang.en)} · ` +
       `textos instáveis entre repetições: ${report.unstable}/${report.evaluated} · ` +
-      `erros de transporte: ${report.transportErrors}`
+      `textos sem nenhuma resposta (fora das métricas): ${report.transportErrors} · ` +
+      `textos decididos com menos de ${REPS} execuções: ${report.partialTexts} · ` +
+      `chamadas com falha (timeout/HTTP): ${failedCalls}/${LAYA_DATASET.length * REPS}`
   );
 
   console.log("\n### 4.2 Latência do modelo\n");
   console.log("| Alvo | média (ms) | p50 (ms) | p95 (ms) |");
   console.log("|---|---:|---:|---:|");
   printLatencyRow("Laya /v1/systemone", modelLatency);
+  if (failedCalls > 0) {
+    console.log(`\n${failedCalls} chamada(s) com falha ficam fora da latência acima (o SDK desiste em 8 s).`);
+  }
   const routing = [...models.entries()].map(([name, n]) => `${name} ${n}`).join(" · ");
-  console.log(`
-Roteamento do sidecar (chamadas por checkpoint): ${routing || "—"}`);
+  console.log(`\nRoteamento do sidecar (chamadas por checkpoint): ${routing || "—"}`);
 }
 
 // ── Demo-api como processo filho ───────────────────────────────────────
 
 const sleep = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
 
+function answersOnPort(port: number): Promise<boolean> {
+  return new Promise((resolve) => {
+    const socket = net.connect({ host: "localhost", port });
+    socket.setTimeout(1_000);
+    socket.once("connect", () => {
+      socket.destroy();
+      resolve(true);
+    });
+    socket.once("timeout", () => {
+      socket.destroy();
+      resolve(false);
+    });
+    socket.once("error", () => resolve(false));
+  });
+}
+
 async function startDemoApi(withLaya: boolean): Promise<{ stop(): Promise<void> }> {
   if (!existsSync(DEMO_ENTRY)) {
     throw new Error(`${DEMO_ENTRY} não encontrado. Rode pela raiz do repo: pnpm experiment:laya`);
+  }
+  // Se algo já responde na porta, o /health abaixo mediria o servidor errado.
+  if (await answersOnPort(DEMO_PORT)) {
+    throw new Error(
+      `a porta ${DEMO_PORT} já está em uso (talvez uma demo-api de execução anterior). Encerre-a ou troque EXPERIMENT_DEMO_PORT.`
+    );
   }
 
   const env: NodeJS.ProcessEnv = {
@@ -200,6 +233,8 @@ async function startDemoApi(withLaya: boolean): Promise<{ stop(): Promise<void> 
     PORT: String(DEMO_PORT),
     RASP_MODE: "monitor",
     TRACEGUARD_ENDPOINT: `${API_URL}/api/v1/ingest`,
+    // Sem isso, um backend com API_KEY recusa o ingest (401) e a 4.4 mostraria tudo como perdido.
+    TRACEGUARD_API_KEY: process.env.TRACEGUARD_API_KEY ?? API_KEY,
   };
   if (withLaya) {
     env.LAYA_SIDECAR_URL = LAYA_URL;
@@ -230,7 +265,7 @@ async function startDemoApi(withLaya: boolean): Promise<{ stop(): Promise<void> 
       const res = await fetch(`http://localhost:${DEMO_PORT}/health`, {
         signal: AbortSignal.timeout(1_000),
       });
-      if (res.ok) return { stop };
+      if (res.ok && child.exitCode === null) return { stop };
     } catch {
       // ainda subindo
     }
@@ -315,20 +350,29 @@ function signed(value: number): string {
   return `${value >= 0 ? "+" : ""}${value.toFixed(1)}`;
 }
 
-function printHotPath(without: LatencySummary, withLaya: LatencySummary): void {
+function printHotPath(
+  without: LatencySummary,
+  burst: LatencySummary,
+  paced: LatencySummary,
+  pacedCount: number,
+  pacingMs: number
+): void {
   console.log("\n### 4.3 Custo no caminho quente\n");
+  console.log(`demo-api em :${DEMO_PORT}, RASP_MODE=monitor\n`);
+  console.log("| Alvo | amostras | média (ms) | p50 (ms) | p95 (ms) |");
+  console.log("|---|---:|---:|---:|---:|");
+  const row = (label: string, n: number, s: LatencySummary) =>
+    console.log(`| ${label} | ${n} | ${s.avg.toFixed(1)} | ${s.p50.toFixed(1)} | ${s.p95.toFixed(1)} |`);
+  row("POST /api/chat sem sidecar", LAYA_DATASET.length * REPS, without);
+  row("POST /api/chat com sidecar, ritmado (toda requisição inspecionada)", pacedCount, paced);
+  row("POST /api/chat com sidecar, rajada (fila de 4 saturada)", LAYA_DATASET.length * REPS, burst);
   console.log(
-    `Amostras por rodada: ${LAYA_DATASET.length * REPS} (+${DEMO_WARMUP} de aquecimento descartadas) · demo-api em :${DEMO_PORT}, RASP_MODE=monitor\n`
+    `\nDiferença ritmado − sem: p50 ${signed(paced.p50 - without.p50)} ms · p95 ${signed(paced.p95 - without.p95)} ms`
   );
-  console.log("| Alvo | média (ms) | p50 (ms) | p95 (ms) |");
-  console.log("|---|---:|---:|---:|");
-  printLatencyRow("POST /api/chat sem sidecar", without);
-  printLatencyRow("POST /api/chat com sidecar", withLaya);
   console.log(
-    `\nDiferença com − sem: p50 ${signed(withLaya.p50 - without.p50)} ms · p95 ${signed(withLaya.p95 - without.p95)} ms`
-  );
-  console.log(
-    "\nNa rodada com sidecar as inspeções rodam em paralelo com as respostas (até 4 em voo), então a disputa de CPU com o sidecar na mesma máquina entra na medição."
+    `\nA linha ritmada é o custo por requisição inspecionada: um envio a cada ${pacingMs} ms (p95 do modelo), então cada corpo chega ao sidecar enquanto a resposta já saiu. ` +
+      "Na rajada, as requisições chegam a cada ~1 ms e o SDK descarta as que encontram as 4 vagas ocupadas: a maioria não é inspecionada. " +
+      `As rodadas sem sidecar e em rajada têm ${DEMO_WARMUP} aquecimentos descartados; a disputa de CPU com o sidecar na mesma máquina entra nas linhas com sidecar.`
   );
 }
 
@@ -343,10 +387,10 @@ async function fetchRaspEvents(): Promise<RaspEvent[]> {
 
 async function runIntegrationStage(
   verdicts: Map<string, CaseVerdict | null>,
-  modelLatency: LatencySummary
-): Promise<void> {
-  const pacingMs = Math.max(100, Math.ceil(modelLatency.p95));
+  pacingMs: number
+): Promise<{ report: DeliveryReport; pacedSamples: number[] }> {
   const sent: SentCase[] = [];
+  const pacedSamples: number[] = [];
 
   for (const item of LAYA_DATASET) {
     const verdict = verdicts.get(item.id) ?? null;
@@ -354,12 +398,15 @@ async function runIntegrationStage(
     const record: SentCase = { caseId: item.id, traceId, sentAt: Date.now() };
     if (verdict?.flagged && verdict.threatType) record.expectedThreatType = verdict.threatType;
     sent.push(record);
-    await postChat(item.text, { traceparent: header });
+    pacedSamples.push((await postChat(item.text, { traceparent: header })).ms);
     await sleep(pacingMs);
   }
 
-  await sleep(Math.ceil(modelLatency.p95) + 3_000);
-  const report = matchDeliveries(sent, await fetchRaspEvents());
+  await sleep(pacingMs + 3_000);
+  return { report: matchDeliveries(sent, await fetchRaspEvents()), pacedSamples };
+}
+
+function printIntegration(report: DeliveryReport, pacingMs: number): void {
   const delay = summarizeLatency(report.delaysMs);
 
   console.log("\n### 4.4 Integração por traceId\n");
@@ -370,15 +417,18 @@ async function runIntegrationStage(
   console.log("|---|---:|");
   console.log(`| Esperados (marcados na 4.1) | ${report.expected} |`);
   console.log(`| Entregues com traceId correto | ${report.delivered} |`);
-  console.log(`| Perdidos (fila, timeout ou flush) | ${report.lost} |`);
+  console.log(`| Não chegaram ao backend | ${report.lost} |`);
   console.log(`| Tipo divergente da 4.1 | ${report.typeMismatch} |`);
   console.log(`| Eventos inesperados | ${report.unexpected} |`);
   console.log(`| Taxa de entrega | ${pct(report.deliveryRate)} |`);
   console.log(`| Atraso do sombra, média (ms) | ${delay.avg.toFixed(0)} |`);
   console.log(`| Atraso do sombra, p95 (ms) | ${delay.p95.toFixed(0)} |`);
   if (report.lostCaseIds.length > 0) {
-    console.log(`\nPerdidos: ${report.lostCaseIds.join(", ")}`);
+    console.log(`\nNão chegaram: ${report.lostCaseIds.join(", ")}`);
   }
+  console.log(
+    "\nO esperado vem do veredito por maioria da 4.1; o sombra decide com uma única chamada. Um texto que não chegou pode ser perda no transporte (fila, timeout, flush) ou variação do modelo nessa chamada. O atraso vai do envio até o fim da classificação (timestamp do evento no SDK)."
+  );
 }
 
 async function main(): Promise<void> {
@@ -396,8 +446,9 @@ async function main(): Promise<void> {
     `Casos: ${LAYA_DATASET.length} · repetições por caso: ${REPS} · limiar noul ≥ ${LAYA_NOUL_THRESHOLD.toFixed(2)}\n`
   );
 
-  const { verdicts, modelLatency, models } = await runAccuracyStage();
-  printAccuracy(verdicts, modelLatency, models);
+  const { verdicts, modelLatency, models, failedCalls } = await runAccuracyStage();
+  printAccuracy(verdicts, modelLatency, models, failedCalls);
+  const pacingMs = Math.max(100, Math.ceil(modelLatency.p95));
 
   const withoutDemo = await startDemoApi(false);
   let withoutSamples: number[];
@@ -409,11 +460,18 @@ async function main(): Promise<void> {
 
   const withDemo = await startDemoApi(true);
   try {
-    const withSamples = await measureHotPath();
-    printHotPath(summarizeLatency(withoutSamples), summarizeLatency(withSamples));
-    // A rodada anterior deixa inspeções em voo; espera a fila esvaziar antes de medir a entrega.
-    await sleep(Math.ceil(modelLatency.p95) * 4);
-    await runIntegrationStage(verdicts, modelLatency);
+    const burstSamples = await measureHotPath();
+    // A rajada deixa inspeções em voo; espera a fila esvaziar antes de medir a entrega.
+    await sleep(pacingMs * 4);
+    const { report, pacedSamples } = await runIntegrationStage(verdicts, pacingMs);
+    printHotPath(
+      summarizeLatency(withoutSamples),
+      summarizeLatency(burstSamples),
+      summarizeLatency(pacedSamples),
+      pacedSamples.length,
+      pacingMs
+    );
+    printIntegration(report, pacingMs);
   } finally {
     await withDemo.stop();
   }

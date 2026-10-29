@@ -67,7 +67,7 @@ Protocolo:
 
 1. **4.1 Acurácia:** cada texto vai 3 vezes direto ao sidecar, com o mesmo payload (`{"message": texto}`), as mesmas perguntas e o mesmo limiar do SDK (`noul ≥ 0.80`, sem abstenção). O veredito é a maioria das 3 execuções. Falha de transporte fica fora das métricas e é contada à parte.
 2. **4.2 Latência do modelo:** p50/p95 de `POST /v1/systemone`. Antes de medir, o aquecimento passa por PT e EN, porque o sidecar baixa sob demanda o checkpoint de cada idioma.
-3. **4.3 Custo no caminho quente:** o script sobe a demo-api duas vezes na porta 4100 (`RASP_MODE=monitor`), primeiro sem e depois com `LAYA_SIDECAR_URL`, e mede `POST /api/chat` (40 × 3 amostras, mais 10 de aquecimento).
+3. **4.3 Custo no caminho quente:** o script sobe a demo-api duas vezes na porta 4100 (`RASP_MODE=monitor`), primeiro sem e depois com `LAYA_SIDECAR_URL`, e mede `POST /api/chat`. As rodadas sem sidecar e em rajada têm 40 × 3 amostras e 10 aquecimentos. A rodada ritmada usa os 40 envios da 4.4, com um intervalo de p95 do modelo entre eles, para que toda requisição seja inspecionada.
 4. **4.4 Integração por traceId:** cada texto vai uma vez com `traceparent` gerado pelo script, em intervalos de pelo menos o p95 do modelo. O script confere em `/api/v1/rasp/events` se cada texto marcado na 4.1 chegou com o mesmo `traceId`.
 
 **4.1 Acurácia (binário: ameaça vs. legítimo)**
@@ -95,10 +95,13 @@ Falsos positivos em legítimos difíceis: — · recall PT: — · recall EN: �
 
 **4.3 Custo no caminho quente**
 
-| Alvo | média (ms) | p50 (ms) | p95 (ms) |
-|---|---:|---:|---:|
-| POST /api/chat sem sidecar | — | — | — |
-| POST /api/chat com sidecar | — | — | — |
+| Alvo | amostras | média (ms) | p50 (ms) | p95 (ms) |
+|---|---:|---:|---:|---:|
+| POST /api/chat sem sidecar | 120 | — | — | — |
+| POST /api/chat com sidecar, ritmado (toda requisição inspecionada) | 40 | — | — | — |
+| POST /api/chat com sidecar, rajada (fila de 4 saturada) | 120 | — | — | — |
+
+A linha ritmada é o custo por requisição inspecionada. Na rajada, o SDK descarta as inspeções que encontram as 4 vagas ocupadas, então a maioria das requisições não chega ao modelo.
 
 **4.4 Integração por traceId**
 

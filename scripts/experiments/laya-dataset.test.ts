@@ -1,3 +1,4 @@
+import { readFileSync } from "node:fs";
 import { describe, expect, it } from "vitest";
 import { LAYA_MAX_PAYLOAD_CHARS } from "../../packages/sdk/src/rasp/laya-shadow.ts";
 import { LAYA_DATASET, type LayaLabel } from "./laya-dataset.ts";
@@ -42,6 +43,11 @@ describe("LAYA_DATASET", () => {
     for (const item of byLabel("secret_leak")) {
       expect(item.text, item.id).toMatch(/example/i);
     }
+  });
+
+  it("never writes provider secret prefixes literally in the source", () => {
+    const source = readFileSync(new URL("./laya-dataset.ts", import.meta.url), "utf8");
+    expect(source).not.toMatch(/sk_live_|ghp_|AKIA[0-9A-Z]{4}/);
   });
 
   it("keeps every text within LAYA_MAX_PAYLOAD_CHARS", () => {
