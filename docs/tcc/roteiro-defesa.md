@@ -23,8 +23,8 @@ Três módulos no mesmo produto:
 1. `pnpm dev` + `pnpm dev:demo-api`
 2. `pnpm demo:scrape`
 3. Dashboard → Segurança: evento `blocked`, score ≥ 70
-4. Clique no Trace ID: painel mostra o HTTP da API **e** o bloqueio RASP
-5. `pnpm experiment:fatigue` ou `pnpm dev:demo:stress` → aba Alertas: fired vs. suprimidos
+4. Clique no Trace ID: painel mostra o HTTP da API, o bloqueio RASP, o alerta correlacionado **e o Copiloto Forense (Motor Causal + MCP)** explicando a cadeia causal (`50 + 20 = 70`) e expondo o payload JSON-RPC do Model Context Protocol (`investigate_trace`)
+5. `pnpm experiment:fatigue` ou `pnpm dev:demo:stress` → aba Alertas: fired vs. suprimidos (clique no botão `trace …` do alerta para abrir o mesmo painel forense)
 
 Se a rede falhar, use o vídeo de backup de 90 segundos (grave uma vez).
 

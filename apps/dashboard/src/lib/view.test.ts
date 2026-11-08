@@ -2,15 +2,19 @@ import { describe, expect, it } from "vitest";
 import { threatLabel } from "./labels";
 import {
   alertSource,
+  alertTraceId,
   barScale,
   barValueFontSize,
+  buildMcpInvestigateSnippet,
   chartYMax,
   activeMonitorsLabel,
   countByLevel,
+  insightTone,
   levelTone,
   orderLevels,
   parseHttpMessage,
   percentOf,
+  pillarLabel,
   threatTone,
   uptimeTone,
 } from "./view";
@@ -68,7 +72,6 @@ describe("orderLevels", () => {
 describe("tons", () => {
   it("threatTone", () => {
     expect(threatTone("sequential_scan")).toBe("threat");
-    expect(threatTone("prompt_injection")).toBe("threat");
     expect(threatTone("bot_user_agent")).toBe("neutral");
   });
   it("uptimeTone", () => {
@@ -126,4 +129,39 @@ describe("activeMonitorsLabel", () => {
     ).toBe("2 de 3 ativos"));
   it("todos pausados", () => expect(activeMonitorsLabel([{ enabled: false }])).toBe("0 de 1 ativos"));
   it("lista vazia", () => expect(activeMonitorsLabel([])).toBe("0 de 0 ativos"));
+});
+
+describe("forensic insight & MCP helpers", () => {
+  it("alertTraceId extrai o traceId quando presente em metadata", () => {
+    expect(alertTraceId({ traceId: "abcd1234" })).toBe("abcd1234");
+    expect(alertTraceId({ traceId: "   " })).toBeNull();
+    expect(alertTraceId({})).toBeNull();
+    expect(alertTraceId(undefined)).toBeNull();
+  });
+
+  it("insightTone mapeia severidade para o tom visual do dashboard", () => {
+    expect(insightTone("critical")).toBe("error");
+    expect(insightTone("warning")).toBe("warn");
+    expect(insightTone("info")).toBe("info");
+    expect(insightTone("ok")).toBe("ok");
+  });
+
+  it("pillarLabel formata os pilares correlacionados", () => {
+    expect(pillarLabel("apm")).toBe("APM");
+    expect(pillarLabel("rasp")).toBe("RASP");
+    expect(pillarLabel("alert")).toBe("Alerta");
+  });
+
+  it("buildMcpInvestigateSnippet monta a chamada JSON-RPC 2.0 para investigate_trace", () => {
+    const snippet = JSON.parse(buildMcpInvestigateSnippet("trace-xyz"));
+    expect(snippet).toEqual({
+      jsonrpc: "2.0",
+      id: 1,
+      method: "tools/call",
+      params: {
+        name: "investigate_trace",
+        arguments: { traceId: "trace-xyz" },
+      },
+    });
+  });
 });

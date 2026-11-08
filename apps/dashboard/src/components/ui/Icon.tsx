@@ -46,6 +46,18 @@ const ICONS = {
       <path d="M12 10v4M12 17.5v.01" />
     </>
   ),
+  sparkle: (
+    <>
+      <path d="M12 3l1.9 5.1L19 10l-5.1 1.9L12 17l-1.9-5.1L5 10l5.1-1.9z" />
+      <path d="M19 3v4M17 5h4" />
+    </>
+  ),
+  terminal: (
+    <>
+      <rect x="3" y="4" width="18" height="16" rx="2" />
+      <path d="M7 9l3 3-3 3M12 15h5" />
+    </>
+  ),
   close: <path d="M6 6l12 12M18 6L6 18" />,
 } satisfies Record<string, ReactNode>;
 

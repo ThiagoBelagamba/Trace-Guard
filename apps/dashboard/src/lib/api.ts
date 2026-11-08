@@ -7,6 +7,7 @@ import type {
   RaspEvent,
   RaspStats,
   TraceDetail,
+  TraceInsight,
   UptimeCheckWithMonitor,
   UptimeMonitor,
   UptimeStats,
@@ -49,6 +50,18 @@ export async function fetchTrace(traceId: string): Promise<TraceDetail> {
   }
   if (!res.ok) throw new Error(`Falha ao buscar trace: ${res.status}`);
   return res.json() as Promise<TraceDetail>;
+}
+
+export async function fetchTraceInsight(traceId: string): Promise<TraceInsight> {
+  const res = await fetch(
+    `${API_URL}/api/v1/traces/${encodeURIComponent(traceId)}/insight`,
+    requestInit()
+  );
+  if (res.status === 404) {
+    throw new Error("Trace não encontrado");
+  }
+  if (!res.ok) throw new Error(`Falha ao gerar diagnóstico: ${res.status}`);
+  return res.json() as Promise<TraceInsight>;
 }
 
 export async function fetchEventStats(

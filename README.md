@@ -97,19 +97,11 @@ No dashboard, aba **Segurança** — eventos RASP em tempo real e gráficos por 
 
 Modo monitor (sem bloqueio): `RASP_MODE=monitor pnpm dev:demo-api`
 
-### Inspeção semântica (sidecar Laya)
+### Copiloto Forense de Trace & Servidor MCP (Model Context Protocol)
 
-O heurístico continua no caminho da resposta. Texto de `POST`/`PUT`/`PATCH` é classificado em background pelo `laya-serve` e, se passar do limiar, entra no mesmo `traceId` como `prompt_injection` ou `secret_leak` (`action: logged`). Sem `LAYA_SIDECAR_URL`, o sombra não roda.
+Ao clicar em qualquer `traceId` no dashboard (nas abas Eventos, Segurança ou Alertas), o painel lateral unifica os três pilares (**APM + RASP + Alertas**) e sintetiza um **Diagnóstico Forense Causal** (`GET /api/v1/traces/:traceId/insight`) com causa raiz, pesos heurísticos do RASP, supressão por cooldown e plano de mitigação. Se `AI_API_URL` estiver definido (ex.: Ollama local ou API compatível com OpenAI), um LLM refina a narrativa sobre o grafo causal determinístico; sem LLM externo, o motor causal responde de forma 100% determinística.
 
-```bash
-docker compose up -d --build laya
-# no .env da demo-api:
-# LAYA_SIDECAR_URL=http://localhost:8000
-# LAYA_API_KEY=traceguard-secret
-pnpm dev:demo-api
-```
-
-`POST /api/chat` com `{ "message": "..." }` é o corpo de texto da demo. A primeira subida baixa o checkpoint `multilingual`.
+O mesmo diagnóstico é exposto para agentes de IA (Cursor, Claude Desktop, IDEs) via **Model Context Protocol (MCP — JSON-RPC 2.0)** em `POST /api/v1/mcp`, com as ferramentas `investigate_trace`, `list_security_threats` e `alert_fatigue_status`.
 
 ## Fase 5 — Uptime, Webhook e Redis
 
@@ -155,7 +147,9 @@ Redis (`REDIS_URL`): sincroniza WebSocket entre backends e rate limit RASP entre
 | GET | `/health` | Health check |
 | POST | `/api/v1/ingest` | Ingestão de eventos de telemetria |
 | GET | `/api/v1/events?limit=10` | Listar eventos recentes |
-| GET | `/api/v1/traces/:traceId` | Drill-down APM + RASP do mesmo trace |
+| GET | `/api/v1/traces/:traceId` | Drill-down APM + RASP + Alertas do mesmo trace |
+| GET | `/api/v1/traces/:traceId/insight` | Diagnóstico forense causal (Motor Causal / LLM) |
+| POST | `/api/v1/mcp` | Servidor Model Context Protocol (JSON-RPC 2.0) |
 | GET | `/api/v1/events/stats` | Agregações para gráficos |
 | GET | `/api/v1/alerts/stats` | Métricas de alertas |
 | POST | `/api/v1/ingest/rasp` | Ingestão RASP |

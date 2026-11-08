@@ -4,7 +4,7 @@ import { useMemo, useState } from "react";
 import clsx from "clsx";
 import type { AlertFired } from "@traceguard/shared";
 import { formatTime } from "../lib/format";
-import { alertSource } from "../lib/view";
+import { alertSource, alertTraceId } from "../lib/view";
 import { Card } from "./ui/Card";
 import { Pill, SegmentedControl } from "./ui/Controls";
 import { EmptyState } from "./ui/EmptyState";
@@ -12,6 +12,7 @@ import { Icon, type IconName } from "./ui/Icon";
 
 interface AlertsPanelProps {
   alerts: AlertFired[];
+  onSelectTrace?: (traceId: string) => void;
 }
 
 const SOURCE_ICONS: Record<ReturnType<typeof alertSource>, IconName> = {
@@ -22,7 +23,7 @@ const SOURCE_ICONS: Record<ReturnType<typeof alertSource>, IconName> = {
 
 type View = "active" | "suppressed";
 
-export function AlertsPanel({ alerts }: AlertsPanelProps) {
+export function AlertsPanel({ alerts, onSelectTrace }: AlertsPanelProps) {
   const [showSuppressed, setShowSuppressed] = useState(false);
 
   const active = useMemo(
@@ -88,6 +89,19 @@ export function AlertsPanel({ alerts }: AlertsPanelProps) {
                 </p>
               </div>
               <div className="ml-auto flex items-center gap-2.5">
+                {alertTraceId(alert.metadata) && (
+                  <button
+                    type="button"
+                    title="Abrir detalhe correlacionado do trace"
+                    onClick={() => {
+                      const id = alertTraceId(alert.metadata);
+                      if (id) onSelectTrace?.(id);
+                    }}
+                    className="rounded-tg-sm border border-tg-border-strong bg-tg-surface-2 px-2 py-[3px] font-mono text-xs text-tg-text-2 hover:border-[#3A3A41] hover:text-tg-text"
+                  >
+                    trace {alertTraceId(alert.metadata)?.slice(0, 8)}…
+                  </button>
+                )}
                 <span className="rounded-tg-sm border border-tg-border-strong px-2 py-[3px] text-xs text-tg-text-2">
                   {alert.service}
                 </span>

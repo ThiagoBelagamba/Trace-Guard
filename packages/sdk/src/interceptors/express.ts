@@ -4,7 +4,6 @@ import { bindContext } from "../core/hooks.js";
 import { continueOrCreateContext } from "../core/traceparent.js";
 import { getRaspRuntime } from "../runtime.js";
 import { getHeader } from "../rasp/fingerprints.js";
-import { scheduleLayaInspection } from "../rasp/laya-shadow.js";
 import type { IncomingRequestLike, RaspConfig } from "../rasp/types.js";
 
 function extractClientIp(req: {
@@ -80,25 +79,6 @@ export function raspMiddleware(options?: Partial<RaspConfig>): RequestHandler {
           threats.length > 0 &&
           effectiveConfig.mode === "block" &&
           score >= effectiveConfig.blockThreshold;
-        const layaUrl = effectiveConfig.layaSidecarUrl?.trim();
-
-        if (layaUrl && !shouldBlock) {
-          scheduleLayaInspection({
-            method: req.method,
-            body: req.body,
-            traceId,
-            spanId,
-            service: runtime.serviceName,
-            clientIp,
-            userAgent,
-            path: incoming.path,
-            layaUrl,
-            apiKey: effectiveConfig.layaApiKey,
-            gate: runtime.layaGate,
-            enqueue: (event) => runtime.exporter.enqueue(event),
-            flush: () => runtime.exporter.flush(),
-          });
-        }
 
         if (threats.length === 0) {
           next();

@@ -44,9 +44,10 @@ export class AlertEngine {
       (r) => r.ruleType === "rasp_threat_count"
     );
     const results: AlertFired[] = [];
+    const latestTraceId = inserted[0]?.trace_id;
 
     for (const rule of rules) {
-      const alert = await this.evaluateRaspRule(rule);
+      const alert = await this.evaluateRaspRule(rule, latestTraceId);
       if (alert) results.push(alert);
     }
 
@@ -106,7 +107,8 @@ export class AlertEngine {
   }
 
   private async evaluateRaspRule(
-    rule: AlertRule
+    rule: AlertRule,
+    traceId?: string
   ): Promise<AlertFired | null> {
     const cooldownKey = rule.service ?? ALL_SERVICES;
     const inCooldown = cooldownRegistry.isInCooldown(
@@ -141,7 +143,11 @@ export class AlertEngine {
       message,
       eventCount: count,
       suppressed: inCooldown,
-      metadata: { threatFilter, raspCount: count },
+      metadata: {
+        threatFilter,
+        raspCount: count,
+        ...(traceId ? { traceId } : {}),
+      },
     });
 
     if (!inCooldown) {

@@ -73,7 +73,7 @@ export function orderLevels(
   return [...known, ...unknown].map((level) => ({ level, count: byLevel[level] }));
 }
 
-const THREAT_TONED = new Set(["sequential_scan", "prompt_injection", "secret_leak"]);
+const THREAT_TONED = new Set(["sequential_scan"]);
 
 export function threatTone(type: string): Tone {
   return THREAT_TONED.has(type) ? "threat" : "neutral";
@@ -90,4 +90,40 @@ export function countByLevel(events: Array<{ level: string }>): Record<string, n
   const counts: Record<string, number> = {};
   for (const e of events) counts[e.level] = (counts[e.level] ?? 0) + 1;
   return counts;
+}
+
+export function alertTraceId(metadata: Record<string, unknown> | undefined): string | null {
+  const raw = metadata?.traceId;
+  if (typeof raw !== "string") return null;
+  const trimmed = raw.trim();
+  return trimmed.length > 0 ? trimmed : null;
+}
+
+export function insightTone(severity: "critical" | "warning" | "info" | "ok"): Tone {
+  if (severity === "critical") return "error";
+  if (severity === "warning") return "warn";
+  if (severity === "info") return "info";
+  return "ok";
+}
+
+export function pillarLabel(pillar: "apm" | "rasp" | "alert"): string {
+  if (pillar === "apm") return "APM";
+  if (pillar === "rasp") return "RASP";
+  return "Alerta";
+}
+
+export function buildMcpInvestigateSnippet(traceId: string): string {
+  return JSON.stringify(
+    {
+      jsonrpc: "2.0",
+      id: 1,
+      method: "tools/call",
+      params: {
+        name: "investigate_trace",
+        arguments: { traceId },
+      },
+    },
+    null,
+    2
+  );
 }

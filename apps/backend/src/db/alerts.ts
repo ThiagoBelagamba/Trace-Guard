@@ -137,6 +137,21 @@ export async function listRecentAlerts(limit: number): Promise<AlertFired[]> {
   return result.rows.map(toAlertFired);
 }
 
+export async function listAlertsByTraceId(traceId: string): Promise<AlertFired[]> {
+  const result = await getPool().query<AlertFiredRow>(
+    `SELECT af.id, af.rule_id, af.service, af.severity, af.title, af.message,
+            af.event_count, af.suppressed, af.metadata, af.fired_at,
+            ar.name AS rule_name
+     FROM alerts_fired af
+     JOIN alert_rules ar ON ar.id = af.rule_id
+     WHERE af.metadata->>'traceId' = $1
+     ORDER BY af.fired_at ASC
+     LIMIT 50`,
+    [traceId]
+  );
+  return result.rows.map(toAlertFired);
+}
+
 export async function getAlertStats(): Promise<AlertStats> {
   const result = await getPool().query<{
     fired: string;

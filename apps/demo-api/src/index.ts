@@ -17,8 +17,6 @@ init({
     blockThreshold: 70,
     sequentialScanThreshold: 20,
     redisUrl: process.env.REDIS_URL,
-    layaSidecarUrl: process.env.LAYA_SIDECAR_URL?.trim() || undefined,
-    layaApiKey: process.env.LAYA_API_KEY?.trim() || undefined,
   },
 });
 

@@ -85,7 +85,7 @@ vitest.config.ts                     MODIFY  inclui apps/dashboard/src/lib/**/*.
 - Create: `apps/dashboard/src/lib/labels.ts`, `apps/dashboard/src/lib/view.ts`, `apps/dashboard/src/lib/view.test.ts`
 
 **Interfaces:**
-- Produces (`labels.ts`): `export const THREAT_LABELS: Record<string, string>` com `rate_limit: "Rate limit", bot_user_agent: "Bot UA", sequential_scan: "Varredura", missing_headers: "Headers ausentes", prompt_injection: "Injeção de prompt", secret_leak: "Segredo no payload"`; `export function threatLabel(type: string): string` (fallback = type).
+- Produces (`labels.ts`): `export const THREAT_LABELS: Record<string, string>` com `rate_limit: "Rate limit", bot_user_agent: "Bot UA", sequential_scan: "Varredura", missing_headers: "Headers ausentes"`; `export function threatLabel(type: string): string` (fallback = type).
 - Produces (`view.ts`):
   - `export type Tone = "error" | "warn" | "info" | "threat" | "ok" | "neutral"`
   - `percentOf(value: number, total: number): number` — inteiro arredondado; `total <= 0` → `0`.
@@ -94,7 +94,7 @@ vitest.config.ts                     MODIFY  inclui apps/dashboard/src/lib/**/*.
   - `alertSource(metadata: Record<string, unknown> | undefined): "uptime" | "rasp" | "generic"` — `monitorId` presente → uptime; `raspCount` presente → rasp.
   - `levelTone(level: string): Tone` — error→error, warn→warn, info→info, outros→neutral.
   - `orderLevels(byLevel: Record<string, number>): Array<{ level: string; count: number }>` — ordem error, warn, info, debug, depois desconhecidos; omite chaves ausentes.
-  - `threatTone(type: string): Tone` — sequential_scan, prompt_injection, secret_leak → threat; outros → neutral.
+  - `threatTone(type: string): Tone` — sequential_scan → threat; outros → neutral.
   - `uptimeTone(status: string | undefined): Tone` — up→ok, degraded→warn, down→error, undefined→neutral.
   - `countByLevel(events: { level: string }[]): Record<string, number>`.
 

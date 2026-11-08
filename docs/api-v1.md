@@ -92,7 +92,7 @@ Lista eventos recentes do PostgreSQL.
 
 ## GET /api/v1/traces/:traceId
 
-Detalhe de um trace para drill-down no dashboard. Correlaciona eventos APM e RASP pelo mesmo `traceId`.
+Detalhe de um trace para drill-down no dashboard. Correlaciona eventos APM, detecções RASP e alertas pelo mesmo `traceId`.
 
 **Resposta 200:**
 ```json
@@ -100,12 +100,66 @@ Detalhe de um trace para drill-down no dashboard. Correlaciona eventos APM e RAS
   "traceId": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
   "events": [],
   "raspEvents": [],
+  "alerts": [],
   "spanCount": 2,
   "durationMs": 48
 }
 ```
 
 **Resposta 404:** `{ "error": "Trace não encontrado" }`
+
+---
+
+## GET /api/v1/traces/:traceId/insight
+
+Diagnóstico forense causal do trace. Sintetiza de forma determinística (`source: "causal-engine"`) o veredito, os pilares correlacionados (`apm`, `rasp`, `alert`), a soma dos pesos heurísticos do RASP, a cadeia causal e as recomendações de mitigação. Se `AI_API_URL` estiver configurado, refina a síntese via LLM (`source: "llm"`).
+
+**Resposta 200:**
+```json
+{
+  "traceId": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+  "verdict": "attack_blocked",
+  "severity": "critical",
+  "headline": "Tentativa de scraping bloqueada pelo RASP (GET /api/products/1 · score 70/100)",
+  "narrative": "O mesmo traceId correlacionou a inspeção RASP do IP 203.0.113.42...",
+  "rootCause": {
+    "category": "rasp",
+    "summary": "assinatura de User-Agent automatizado (+50) + ausência de cabeçalhos de navegador (+20) a partir de 203.0.113.42",
+    "service": "demo-api",
+    "spanId": "aaaa1111aaaa1111"
+  },
+  "causalChain": [
+    "Origem 203.0.113.42 enviou GET /api/products/1 (UA: python-requests/2.31.0).",
+    "Middleware RASP em demo-api somou score 70/100: assinatura de User-Agent automatizado (+50) + ausência de cabeçalhos de navegador (+20).",
+    "Ação em runtime: requisição interceptada com HTTP 403 no span aaaa1111aaaa1111 (score 70 >= limiar 70)."
+  ],
+  "recommendations": [
+    "Manter bloqueio em memória/Redis ativo para o IP 203.0.113.42 e auditar reincidência na aba Segurança."
+  ],
+  "correlatedPillars": ["apm", "rasp"],
+  "source": "causal-engine",
+  "generatedAt": "2026-11-08T20:00:00.000Z"
+}
+```
+
+**Resposta 404:** `{ "error": "Trace não encontrado" }`
+
+---
+
+## POST /api/v1/mcp
+
+Servidor **Model Context Protocol (MCP — JSON-RPC 2.0)** embutido no backend. Suporta os métodos `initialize`, `ping`, `tools/list` e `tools/call` para as ferramentas:
+
+- `investigate_trace` (`{ "traceId": "..." }`)
+- `list_security_threats` (`{ "limit": 15 }`)
+- `alert_fatigue_status` (`{ "limit": 15 }`)
+
+**Exemplo (`tools/call`):**
+```bash
+curl -X POST http://localhost:3001/api/v1/mcp \
+  -H "Content-Type: application/json" \
+  -d '{"jsonrpc":"2.0","id":1,"method":"tools/call","params":{"name":"investigate_trace","arguments":{"traceId":"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"}}}'
+```
 
 ---
 

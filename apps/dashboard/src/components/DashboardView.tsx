@@ -276,7 +276,7 @@ export function DashboardView() {
               }
             />
             <AlertStatsBanner stats={alertStats} />
-            <AlertsPanel alerts={alerts} />
+            <AlertsPanel alerts={alerts} onSelectTrace={setSelectedTraceId} />
           </>
         )}
 

@@ -24,13 +24,41 @@ export type WsMessage =
   | { type: "connected"; clientId: string }
   | { type: "ping" };
 
-/** Detalhe de um trace para drill-down no dashboard (APM + RASP). */
+/** Detalhe de um trace para drill-down no dashboard (APM + RASP + Alertas). */
 export interface TraceDetail {
   traceId: string;
   events: DashboardEvent[];
   raspEvents: RaspEvent[];
+  alerts?: AlertFired[];
   spanCount: number;
   durationMs: number | null;
+}
+
+export type TraceVerdict =
+  | "attack_blocked"
+  | "attack_monitored"
+  | "incident"
+  | "degraded"
+  | "normal";
+
+export interface TraceInsight {
+  traceId: string;
+  verdict: TraceVerdict;
+  severity: "critical" | "warning" | "info" | "ok";
+  headline: string;
+  narrative: string;
+  rootCause: {
+    category: "rasp" | "application_error" | "latency" | "healthy";
+    summary: string;
+    service: string;
+    spanId: string | null;
+  };
+  causalChain: string[];
+  recommendations: string[];
+  correlatedPillars: Array<"apm" | "rasp" | "alert">;
+  source: "causal-engine" | "llm";
+  model?: string;
+  generatedAt: string;
 }
 
 export interface EventStats {

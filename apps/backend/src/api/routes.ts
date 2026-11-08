@@ -3,16 +3,30 @@ import type { WebSocket } from "ws";
 import { logEventBatchSchema } from "@traceguard/shared";
 import {
   getAlertStats,
+  listAlertsByTraceId,
   listAllRules,
   listRecentAlerts,
   setRuleEnabled,
 } from "../db/alerts.js";
 import { toDashboardEvent } from "../db/mappers.js";
 import { getEventStats, listEventsByTraceId, listRecentEvents } from "../db/pool.js";
-import { listRaspEventsByTraceId } from "../db/rasp.js";
+import { getRaspStats, listRaspEventsByTraceId, listRecentRaspEvents } from "../db/rasp.js";
+import { handleMcpRequest, type JsonRpcRequest } from "../mcp/handler.js";
 import { publishLogEvents } from "../publishers/rabbitmq.js";
 import { eventHub } from "../realtime/event-hub.js";
 import { getTraceDetail } from "../traces/get-trace.js";
+import { generateTraceInsight } from "../traces/insight.js";
+
+async function lookupTrace(traceId: string) {
+  return getTraceDetail(traceId, {
+    listEventsByTraceId: async (id) => {
+      const rows = await listEventsByTraceId(id);
+      return rows.map(toDashboardEvent);
+    },
+    listRaspByTraceId: (id) => listRaspEventsByTraceId(id),
+    listAlertsByTraceId: (id) => listAlertsByTraceId(id),
+  });
+}
 
 export async function registerRoutes(app: FastifyInstance): Promise<void> {
   app.get("/health", async () => {
@@ -61,13 +75,7 @@ export async function registerRoutes(app: FastifyInstance): Promise<void> {
   app.get<{ Params: { traceId: string } }>(
     "/api/v1/traces/:traceId",
     async (request, reply) => {
-      const detail = await getTraceDetail(request.params.traceId, {
-        listEventsByTraceId: async (traceId) => {
-          const rows = await listEventsByTraceId(traceId);
-          return rows.map(toDashboardEvent);
-        },
-        listRaspByTraceId: (traceId) => listRaspEventsByTraceId(traceId),
-      });
+      const detail = await lookupTrace(request.params.traceId);
 
       if (!detail) {
         return reply.status(404).send({ error: "Trace não encontrado" });
@@ -76,6 +84,39 @@ export async function registerRoutes(app: FastifyInstance): Promise<void> {
       return detail;
     }
   );
+
+  app.get<{ Params: { traceId: string } }>(
+    "/api/v1/traces/:traceId/insight",
+    async (request, reply) => {
+      const detail = await lookupTrace(request.params.traceId);
+      if (!detail) {
+        return reply.status(404).send({ error: "Trace não encontrado" });
+      }
+
+      return generateTraceInsight(detail);
+    }
+  );
+
+  app.post("/api/v1/mcp", async (request) => {
+    const body = (request.body ?? {}) as JsonRpcRequest;
+    return handleMcpRequest(body, {
+      getTrace: lookupTrace,
+      getRaspOverview: async (limit) => {
+        const [stats, events] = await Promise.all([
+          getRaspStats(),
+          listRecentRaspEvents(limit),
+        ]);
+        return { stats, events };
+      },
+      getAlertOverview: async (limit) => {
+        const [stats, alerts] = await Promise.all([
+          getAlertStats(),
+          listRecentAlerts(limit),
+        ]);
+        return { stats, alerts };
+      },
+    });
+  });
 
   app.get<{ Querystring: { since?: string; bucket?: string } }>(
     "/api/v1/events/stats",

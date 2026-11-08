@@ -79,5 +79,52 @@ describe("assembleTrace", () => {
 
     expect(detail.durationMs).toBeNull();
     expect(detail.spanCount).toBe(1);
+    expect(detail.alerts).toEqual([]);
+  });
+
+  it("includes correlated alerts ordered chronologically in the trace", () => {
+    const detail = assembleTrace(
+      "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+      [
+        event({
+          id: "e1",
+          spanId: "span-a",
+          createdAt: "2026-01-01T00:00:01.000Z",
+          message: "DB error",
+        }),
+      ],
+      [],
+      [
+        {
+          id: "a2",
+          ruleId: "r1",
+          ruleName: "Rajada no mesmo trace",
+          service: "demo-api",
+          severity: "critical",
+          title: "Rajada suprimida",
+          message: "3 erros",
+          eventCount: 3,
+          suppressed: true,
+          firedAt: "2026-01-01T00:00:03.500Z",
+          metadata: { traceId: "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa" },
+        },
+        {
+          id: "a1",
+          ruleId: "r1",
+          ruleName: "Rajada no mesmo trace",
+          service: "demo-api",
+          severity: "critical",
+          title: "Rajada acionada",
+          message: "3 erros",
+          eventCount: 3,
+          suppressed: false,
+          firedAt: "2026-01-01T00:00:02.000Z",
+          metadata: { traceId: "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa" },
+        },
+      ]
+    );
+
+    expect(detail.alerts.map((a) => a.id)).toEqual(["a1", "a2"]);
+    expect(detail.durationMs).toBe(2500);
   });
 });

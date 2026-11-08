@@ -44,6 +44,24 @@ describe("getTraceDetail", () => {
     const detail = await getTraceDetail("trace-1", {
       listEventsByTraceId: async (id) => (id === "trace-1" ? events : []),
       listRaspByTraceId: async (id) => (id === "trace-1" ? raspEvents : []),
+      listAlertsByTraceId: async (id) =>
+        id === "trace-1"
+          ? [
+              {
+                id: "alert-1",
+                ruleId: "rule-1",
+                ruleName: "RASP: bots",
+                service: "demo-api",
+                severity: "warning",
+                title: "RASP: 5 bots detectados",
+                message: "5 eventos RASP",
+                eventCount: 5,
+                suppressed: false,
+                firedAt: "2026-01-01T00:00:02.000Z",
+                metadata: { traceId: "trace-1" },
+              },
+            ]
+          : [],
     });
 
     expect(detail).not.toBeNull();
@@ -51,5 +69,7 @@ describe("getTraceDetail", () => {
     expect(detail?.events).toHaveLength(1);
     expect(detail?.raspEvents).toHaveLength(1);
     expect(detail?.raspEvents[0]?.action).toBe("blocked");
+    expect(detail?.alerts).toHaveLength(1);
+    expect(detail?.alerts[0]?.id).toBe("alert-1");
   });
 });
