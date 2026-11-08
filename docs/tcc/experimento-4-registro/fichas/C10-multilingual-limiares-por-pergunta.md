@@ -92,4 +92,13 @@ Pendente — aguardando `laya-test.json`.
 
 ## 10. Observações
 
-Pendente.
+**Ressalva de precisão (08/11/2026, depois do pré-registro e antes do teste).** As notas do pool da seção 5 vieram das saídas salvas, que imprimiam 3 casas decimais. Oito casos do pool aparecem exatamente como `0.995` (injeção) ou `0.990` (credencial), os limiares desta configuração. Uma nota impressa `0.995` pode ser qualquer valor entre 0,9945 e 0,9955, e o SDK compara o valor bruto.
+
+| Leitura dos 8 casos de fronteira | F1 | Recall PI | Recall SL | FP em difíceis |
+|---|---:|---:|---:|---:|
+| Todos no limiar ou acima (o que a seção 5 mostra) | 0,823 | 0,542 | 0,754 | 10/64 |
+| Todos abaixo do limiar | 0,818 | 0,517 | 0,754 | 7/64 |
+
+Os números do pool são, portanto, uma faixa, e não um valor exato. Não se sabe, a partir das saídas salvas, se o par 0,995 / 0,99 continuaria em primeiro na grade com as notas brutas. **O veredito não é afetado:** a execução no teste usa as notas brutas do sidecar. Desde esta data, a saída do script imprime 6 casas.
+
+Mais conclusões ficam pendentes até a execução no teste.

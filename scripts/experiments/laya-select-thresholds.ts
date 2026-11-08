@@ -78,13 +78,18 @@ export function poolMetrics(pool: readonly PoolPart[], t: LayaThresholds): Resul
   };
 }
 
-function better(a: Selection, b: Selection): boolean {
+/**
+ * Negativo quando `a` vem antes: maior F1, maior recall de injeção, maior
+ * recall de credencial, menor soma de limiares e, por fim, menor limiar de injeção.
+ */
+export function compareSelections(a: Selection, b: Selection): number {
   const am = a.metrics, bm = b.metrics;
-  if (am.f1 !== bm.f1) return am.f1 > bm.f1;
-  if (am.recallPi !== bm.recallPi) return am.recallPi > bm.recallPi;
-  if (am.recallSl !== bm.recallSl) return am.recallSl > bm.recallSl;
+  if (am.f1 !== bm.f1) return bm.f1 - am.f1;
+  if (am.recallPi !== bm.recallPi) return bm.recallPi - am.recallPi;
+  if (am.recallSl !== bm.recallSl) return bm.recallSl - am.recallSl;
   const sum = (s: Selection) => s.thresholds.prompt_injection + s.thresholds.secret_leak;
-  return sum(a) < sum(b);
+  if (sum(a) !== sum(b)) return sum(a) - sum(b);
+  return a.thresholds.prompt_injection - b.thresholds.prompt_injection;
 }
 
 /** Todos os pares que respeitam a restrição, do melhor para o pior. */
@@ -102,7 +107,7 @@ export function rankThresholds(
       ok.push({ thresholds, metrics, candidates: 0 });
     }
   }
-  ok.sort((a, b) => (better(a, b) ? -1 : better(b, a) ? 1 : 0));
+  ok.sort(compareSelections);
   return ok.map((s) => ({ ...s, candidates: ok.length }));
 }
 

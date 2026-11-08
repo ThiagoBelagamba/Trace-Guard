@@ -114,10 +114,13 @@ export function majorityVerdict(
   return verdict;
 }
 
-/** Nota com 3 casas; "(abst.)" quando o sidecar se absteve. */
+/**
+ * Nota com 6 casas, para a re-pontuação decidir o lado certo de limiares como
+ * 0,995 (com 3 casas, "0.995" cobria [0,9945, 0,9955)). "(abst.)" = abstenção.
+ */
 export function formatNoul(noul: number | null, abstained: boolean): string {
   if (noul === null) return "—";
-  return abstained ? `${noul.toFixed(3)} (abst.)` : noul.toFixed(3);
+  return abstained ? `${noul.toFixed(6)} (abst.)` : noul.toFixed(6);
 }
 
 export interface AccuracyReport {

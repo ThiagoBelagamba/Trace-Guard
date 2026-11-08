@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import type { LayaCase } from "./laya-dataset.ts";
 import type { CaseScore } from "./laya-rescore.ts";
-import { selectThresholds, writeThresholds } from "./laya-select-thresholds.ts";
+import { compareSelections, selectThresholds, writeThresholds, type Selection } from "./laya-select-thresholds.ts";
 
 function item(id: string, label: LayaCase["label"], hard = false): LayaCase {
   return { id, lang: "pt", label, hard, category: "x", text: id };
@@ -72,5 +72,29 @@ describe("writeThresholds", () => {
     expect(() =>
       writeThresholds("C10", { prompt_injection: 0.99, secret_leak: 0.99 }, { commitOf: () => "abc123" })
     ).toThrow(/congelad/);
+  });
+});
+
+describe("compareSelections", () => {
+  function sel(pi: number, sl: number, f1: number, recallPi: number, recallSl: number): Selection {
+    return {
+      thresholds: { prompt_injection: pi, secret_leak: sl },
+      metrics: {
+        tp: 0, fp: 0, fn: 0, tn: 0, precision: 0, recall: 0, f1, recallPi, recallSl,
+        hardFp: 0, hardTotal: 0, latencyMeanMs: null, latencyP95Ms: null,
+      },
+      candidates: 0,
+    };
+  }
+
+  it("ranks injection recall above a smaller threshold sum", () => {
+    const a = sel(0.9, 0.999, 0.8, 1, 0);
+    const b = sel(0.99, 0.85, 0.8, 0, 1);
+    expect(compareSelections(a, b)).toBeLessThan(0);
+    expect(compareSelections(b, a)).toBeGreaterThan(0);
+  });
+
+  it("breaks a full tie by the lower injection threshold", () => {
+    expect(compareSelections(sel(0.99, 0.995, 0.8, 1, 1), sel(0.995, 0.99, 0.8, 1, 1))).toBeLessThan(0);
   });
 });

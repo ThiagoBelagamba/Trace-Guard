@@ -216,12 +216,13 @@ describe("pendingCheckpoints", () => {
 });
 
 describe("formatNoul", () => {
-  it("prints three decimals so 0.795 does not read as the 0.80 threshold", () => {
-    expect(formatNoul(0.795, false)).toBe("0.795");
+  it("prints six decimals so a score next to a threshold keeps its side", () => {
+    expect(formatNoul(0.795, false)).toBe("0.795000");
+    expect(formatNoul(0.99496, false)).toBe("0.994960");
   });
 
   it("marks an abstained answer", () => {
-    expect(formatNoul(0.48, true)).toBe("0.480 (abst.)");
+    expect(formatNoul(0.48, true)).toBe("0.480000 (abst.)");
   });
 
   it("prints a dash when there is no signal", () => {

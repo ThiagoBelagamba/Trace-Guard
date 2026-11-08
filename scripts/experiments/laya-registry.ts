@@ -55,6 +55,8 @@ export interface LayaResult {
   origem: "execucao" | "extraido-de-saida";
   /** Caminho da saída bruta, relativo a REGISTRY_DIR. */
   saida: string;
+  /** Revisão do código na execução (ausente nos resultados extraídos de saídas antigas). */
+  codigo?: { commit: string; modificado: boolean };
   metricas: ResultMetrics;
 }
 

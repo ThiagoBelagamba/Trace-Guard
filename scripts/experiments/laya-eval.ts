@@ -62,9 +62,11 @@ import { BASELINE_POLICY, inspectBaseline } from "./laya-baseline.ts";
 import { configPath, REGISTRY_DIR, type DatasetName, type LayaResult } from "./laya-registry.ts";
 import {
   assertCommitted,
-  configCommit,
+  cleanCommit,
+  codeRevision,
   metricsFromReport,
   modelFor,
+  refuseTestOverwrite,
   resolveRunPlan,
   sdkPolicy,
   TEST_FILE,
@@ -654,7 +656,8 @@ function applyRunPlan(plan: RunPlan): string | null {
   datasetName = plan.dataset;
   stages = "accuracy";
   const file = configPath(config.id);
-  return plan.dataset === "test" ? assertCommitted(file) : configCommit(file);
+  refuseTestOverwrite(plan.dataset, path.join(REGISTRY_DIR, "resultados", `${config.id}--${plan.dataset}.json`));
+  return plan.dataset === "test" ? assertCommitted(file) : cleanCommit(file);
 }
 
 /** A variante do JSON, com o mesmo rótulo de seção que a re-pontuação lê. */
@@ -684,6 +687,7 @@ function writeRegistryRun(plan: RunPlan, commit: string | null, run: AccuracyRun
     commit_config: commit,
     origem: "execucao",
     saida,
+    codigo: codeRevision(),
     metricas: metricsFromReport(run.report, run.modelLatency),
   };
   mkdirSync(path.join(REGISTRY_DIR, "saidas"), { recursive: true });
@@ -729,7 +733,7 @@ async function main(): Promise<void> {
   console.log("## Experimento 4 — Laya (sidecar em modo sombra)\n");
   if (runPlan) {
     const c = runPlan.config;
-    console.log(`Configuração: ${c.id} — ${c.titulo} · status: ${c.status} · commit: ${commit ?? "não commitado"}`);
+    console.log(`Configuração: ${c.id} — ${c.titulo} · status: ${c.status} · commit: ${commit ?? "não commitado ou modificado"}`);
   }
   console.log(`Sidecar: ${LAYA_URL}`);
   console.log(
