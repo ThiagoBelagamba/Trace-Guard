@@ -552,6 +552,26 @@ Integração por `traceId`: 22 de 22 alertas esperados chegaram ao backend com o
 
 ---
 
+## 14. Validação independente
+
+### 14.1 Critério pré-registrado
+
+> Registrado em 08/11/2026, **antes** de qualquer execução no conjunto de validação, e não alterado depois.
+
+No conjunto de validação (`scripts/experiments/data/laya-validation.json`, textos escritos sem olhar as notas do modelo, disjunto do conjunto de desenvolvimento), os ajustes R1–R3 "funcionam" se as três condições valerem:
+
+1. F1 binário do SDK atual ≥ F1 da linha de base + 0,10;
+2. recall de `secret_leak` ≥ linha de base + 0,20;
+3. taxa de FP em legítimos difíceis ≤ linha de base + 0,05.
+
+Execução prevista: `LAYA_DATASET=validation LAYA_STAGES=accuracy pnpm experiment:laya`, com 1 repetição por texto (o modelo é determinístico, §6.1) e as duas variantes da §13 lado a lado. O veredito é dado por condição. Se alguma falhar, R1–R3 não são reportados como ganho na monografia.
+
+### 14.2 Resultado
+
+*Pendente: aguarda o conjunto de validação.*
+
+---
+
 ## Apêndice A — Método das sondagens complementares
 
 As sondagens das seções 6 e 7 chamaram `POST /v1/systemone` diretamente, com `Authorization: Bearer <LAYA_API_KEY>` e `min_confidence: 0.8`, nos 40 textos de `LAYA_DATASET`, com 1 chamada por texto e configuração (o modelo é determinístico).
