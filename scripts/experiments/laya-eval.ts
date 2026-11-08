@@ -32,7 +32,8 @@ import {
   type LayaInspectionResult,
 } from "../../packages/sdk/src/rasp/laya-inspector.ts";
 import { extractInspectableText } from "../../packages/sdk/src/rasp/laya-shadow.ts";
-import { LAYA_DATASET } from "./laya-dataset.ts";
+import { LAYA_DATASET, type LayaCase } from "./laya-dataset.ts";
+import { checkDatasetIntegrity, loadLayaDatasetFile } from "./laya-dataset-loader.ts";
 import {
   buildAccuracyReport,
   formatNoul,
@@ -55,7 +56,33 @@ const LAYA_API_KEY = process.env.LAYA_API_KEY ?? "traceguard-secret";
 const API_URL = (process.env.API_URL ?? "http://localhost:3001").replace(/\/$/, "");
 const API_KEY = process.env.API_KEY;
 const DEMO_PORT = parseInt(process.env.EXPERIMENT_DEMO_PORT ?? "4100", 10);
-const REPS = 3;
+/** O modelo é determinístico (relatório §6.1): 1 repetição basta para a acurácia. */
+const REPS = Math.max(1, parseInt(process.env.LAYA_REPS ?? "1", 10) || 1);
+/** O caminho quente mede tempo de resposta, que varia: mantém 3 amostras por texto. */
+const HOT_PATH_REPS = 3;
+const DATASET_NAME = process.env.LAYA_DATASET ?? "dev";
+const VALIDATION_FILE = path.join("scripts", "experiments", "data", "laya-validation.json");
+const STAGES = process.env.LAYA_STAGES ?? "all";
+/** GET /api/v1/rasp/events devolve no máximo 100 eventos. */
+const MAX_INTEGRATION_TEXTS = 100;
+let DATASET: readonly LayaCase[] = LAYA_DATASET;
+
+/** dev = os 40 textos do relatório; validation = o JSON independente (R9), conferido antes de usar. */
+function resolveDataset(): readonly LayaCase[] {
+  if (DATASET_NAME === "dev") return LAYA_DATASET;
+  if (DATASET_NAME !== "validation") {
+    throw new Error(`LAYA_DATASET=${DATASET_NAME} desconhecido. Use dev ou validation.`);
+  }
+  if (!existsSync(VALIDATION_FILE)) {
+    throw new Error(`${VALIDATION_FILE} não encontrado. Veja scripts/experiments/data/README.md.`);
+  }
+  const cases = loadLayaDatasetFile(VALIDATION_FILE);
+  const problems = checkDatasetIntegrity(cases, { minPerClass: 100, disjointFrom: LAYA_DATASET });
+  if (problems.length > 0) {
+    throw new Error(`conjunto de validação recusado:\n- ${problems.join("\n- ")}`);
+  }
+  return cases;
+}
 const DEMO_WARMUP = 10;
 const DEMO_ENTRY = path.join("apps", "demo-api", "src", "index.ts");
 const BROWSER_UA =
@@ -171,7 +198,7 @@ async function runAccuracyStage(variant: Variant): Promise<AccuracyRun> {
   const models = new Map<string, number>();
   let failedCalls = 0;
 
-  for (const item of LAYA_DATASET) {
+  for (const item of DATASET) {
     const runs: (LayaInspectionResult | null)[] = [];
     for (let rep = 0; rep < REPS; rep++) {
       const result = await variant.inspect(item.text);
@@ -187,7 +214,7 @@ async function runAccuracyStage(variant: Variant): Promise<AccuracyRun> {
   }
 
   const report = buildAccuracyReport(
-    LAYA_DATASET.map((item) => ({ item, verdict: verdicts.get(item.id) ?? null }))
+    DATASET.map((item) => ({ item, verdict: verdicts.get(item.id) ?? null }))
   );
   return { variant, verdicts, modelLatency: summarizeLatency(latencies), models, failedCalls, report };
 }
@@ -225,7 +252,7 @@ function printAccuracy(run: AccuracyRun): void {
   console.log(`### 4.1 Acurácia — ${run.variant.label}\n`);
   console.log("| Caso | Idioma | Rótulo | Difícil | Veredito | noul PI | noul SL |");
   console.log("|---|---|---|---|---|---:|---:|");
-  for (const item of LAYA_DATASET) {
+  for (const item of DATASET) {
     const v = verdicts.get(item.id) ?? null;
     console.log(
       `| ${item.id} | ${item.lang} | ${item.label === "benign" ? "legítimo" : item.label} | ${item.hard ? "sim" : "não"} | ${verdictLabel(v)} | ${formatNoul(v?.piNoul ?? null, v?.piAbstained ?? false)} | ${formatNoul(v?.slNoul ?? null, v?.slAbstained ?? false)} |`
@@ -241,10 +268,10 @@ function printAccuracy(run: AccuracyRun): void {
   console.log(
     `\nFalsos positivos em legítimos difíceis: ${report.hardBenign.falsePositives}/${report.hardBenign.total} · ` +
       `recall PT ${pct(report.recallByLang.pt)} · recall EN ${pct(report.recallByLang.en)} · ` +
-      `textos instáveis entre repetições: ${report.unstable}/${report.evaluated} · ` +
+      `textos instáveis entre repetições: ${REPS === 1 ? "n/a (1 repetição)" : `${report.unstable}/${report.evaluated}`} · ` +
       `textos sem nenhuma resposta (fora das métricas): ${report.transportErrors} · ` +
       `textos decididos com menos de ${REPS} execuções: ${report.partialTexts} · ` +
-      `chamadas com falha (timeout/HTTP): ${failedCalls}/${LAYA_DATASET.length * REPS} · ` +
+      `chamadas com falha (timeout/HTTP): ${failedCalls}/${DATASET.length * REPS} · ` +
       `tipo correto: ${report.typeCorrect.correct}/${report.typeCorrect.detected} ameaças detectadas`
   );
 
@@ -418,11 +445,11 @@ function postChat(
 
 async function measureHotPath(): Promise<number[]> {
   for (let i = 0; i < DEMO_WARMUP; i++) {
-    await postChat(LAYA_DATASET[i % LAYA_DATASET.length]!.text);
+    await postChat(DATASET[i % DATASET.length]!.text);
   }
   const samples: number[] = [];
-  for (const item of LAYA_DATASET) {
-    for (let rep = 0; rep < REPS; rep++) {
+  for (const item of DATASET) {
+    for (let rep = 0; rep < HOT_PATH_REPS; rep++) {
       samples.push((await postChat(item.text)).ms);
     }
   }
@@ -446,9 +473,9 @@ function printHotPath(
   console.log("|---|---:|---:|---:|---:|");
   const row = (label: string, n: number, s: LatencySummary) =>
     console.log(`| ${label} | ${n} | ${s.avg.toFixed(1)} | ${s.p50.toFixed(1)} | ${s.p95.toFixed(1)} |`);
-  row("POST /api/chat sem sidecar", LAYA_DATASET.length * REPS, without);
+  row("POST /api/chat sem sidecar", DATASET.length * HOT_PATH_REPS, without);
   row("POST /api/chat com sidecar, ritmado (toda requisição inspecionada)", pacedCount, paced);
-  row("POST /api/chat com sidecar, rajada (fila de 4 saturada)", LAYA_DATASET.length * REPS, burst);
+  row("POST /api/chat com sidecar, rajada (fila de 4 saturada)", DATASET.length * HOT_PATH_REPS, burst);
   console.log(
     `\nDiferença ritmado − sem: p50 ${signed(paced.p50 - without.p50)} ms · p95 ${signed(paced.p95 - without.p95)} ms`
   );
@@ -475,7 +502,7 @@ async function runIntegrationStage(
   const sent: SentCase[] = [];
   const pacedSamples: number[] = [];
 
-  for (const item of LAYA_DATASET) {
+  for (const item of DATASET) {
     const verdict = verdicts.get(item.id) ?? null;
     const { traceId, header } = newTraceparent();
     const record: SentCase = { caseId: item.id, traceId, sentAt: Date.now() };
@@ -515,6 +542,16 @@ function printIntegration(report: DeliveryReport, pacingMs: number): void {
 }
 
 async function main(): Promise<void> {
+  DATASET = resolveDataset();
+  if (STAGES !== "all" && STAGES !== "accuracy") {
+    throw new Error(`LAYA_STAGES=${STAGES} desconhecido. Use all ou accuracy.`);
+  }
+  if (STAGES === "all" && DATASET.length > MAX_INTEGRATION_TEXTS) {
+    throw new Error(
+      `a integração (4.4) confere no máximo ${MAX_INTEGRATION_TEXTS} textos e o conjunto tem ${DATASET.length}. ` +
+        "Rode com LAYA_STAGES=accuracy."
+    );
+  }
   await assertReachable(
     `${LAYA_URL}/health`,
     "Suba o sidecar com: docker compose --profile laya up -d --build laya"
@@ -529,7 +566,7 @@ async function main(): Promise<void> {
   );
   console.log(`Backend: ${API_URL}`);
   console.log(
-    `Casos: ${LAYA_DATASET.length} · repetições por caso: ${REPS} · limiar noul ≥ ${LAYA_NOUL_THRESHOLD.toFixed(2)}\n`
+    `Conjunto: ${DATASET_NAME} · casos: ${DATASET.length} · repetições por caso: ${REPS} · limiar noul ≥ ${LAYA_NOUL_THRESHOLD.toFixed(2)} · etapas: ${STAGES}\n`
   );
 
   const runs: AccuracyRun[] = [];
@@ -540,6 +577,10 @@ async function main(): Promise<void> {
   }
   printComparison(runs);
   const { verdicts, modelLatency } = runs[0]!;
+  if (STAGES === "accuracy") {
+    console.log("\nEtapas 4.3 e 4.4 puladas (LAYA_STAGES=accuracy).");
+    return;
+  }
   const pacingMs = Math.max(100, Math.ceil(modelLatency.p95));
 
   const withoutDemo = await startDemoApi(false);
