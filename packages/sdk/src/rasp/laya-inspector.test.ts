@@ -190,6 +190,20 @@ describe("inspectPayloadWithLaya", () => {
     expect(pickThreatType(false, false)).toBeUndefined();
   });
 
+  it("forces a checkpoint only when asked", async () => {
+    const bodies: Record<string, unknown>[] = [];
+    const fetchImpl = async (_url: unknown, init?: RequestInit) => {
+      bodies.push(JSON.parse(String(init?.body)));
+      return jsonResponse({ answers: {} });
+    };
+
+    await inspectPayloadWithLaya("x", "http://laya", undefined, { fetchImpl, model: "english" });
+    await inspectPayloadWithLaya("x", "http://laya", undefined, { fetchImpl });
+
+    expect(bodies[0]?.model).toBe("english");
+    expect(bodies[1]).not.toHaveProperty("model");
+  });
+
   it("returns null when the sidecar answers with an error", async () => {
     const result = await inspectPayloadWithLaya("oi", "http://laya", undefined, {
       fetchImpl: async () => jsonResponse({ detail: "busy" }, 503),

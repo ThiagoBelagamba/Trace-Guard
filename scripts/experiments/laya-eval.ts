@@ -53,6 +53,8 @@ import { BASELINE_POLICY, inspectBaseline } from "./laya-baseline.ts";
 
 const LAYA_URL = (process.env.LAYA_SIDECAR_URL ?? "http://localhost:8000").replace(/\/$/, "");
 const LAYA_API_KEY = process.env.LAYA_API_KEY ?? "traceguard-secret";
+/** Checkpoint forçado (R7); vale para a variante sdk e para a demo-api filha. */
+const LAYA_MODEL = process.env.LAYA_MODEL?.trim() || undefined;
 const API_URL = (process.env.API_URL ?? "http://localhost:3001").replace(/\/$/, "");
 const API_KEY = process.env.API_KEY;
 const DEMO_PORT = parseInt(process.env.EXPERIMENT_DEMO_PORT ?? "4100", 10);
@@ -107,7 +109,7 @@ function payloadFor(text: string): string {
 }
 
 function inspect(text: string): Promise<LayaInspectionResult | null> {
-  return inspectPayloadWithLaya(payloadFor(text), LAYA_URL, LAYA_API_KEY);
+  return inspectPayloadWithLaya(payloadFor(text), LAYA_URL, LAYA_API_KEY, LAYA_MODEL ? { model: LAYA_MODEL } : undefined);
 }
 
 /**
@@ -120,7 +122,8 @@ const WARMUP_TEXTS = [
   "Olá, qual o prazo de entrega para São Paulo?",
   "Hi, when will my order be shipped?",
 ];
-const REQUIRED_CHECKPOINTS: readonly string[] = ["multilingual", "english"];
+/** Com LAYA_MODEL, o sidecar só usa aquele checkpoint; sem ele, os dois do roteamento. */
+const REQUIRED_CHECKPOINTS: readonly string[] = LAYA_MODEL ? [LAYA_MODEL] : ["multilingual", "english"];
 const WARMUP_DEADLINE_MS = 180_000;
 const WARMUP_CALL_TIMEOUT_MS = 30_000;
 
@@ -132,6 +135,7 @@ async function warmUpSidecar(): Promise<{ elapsedMs: number; seen: string[] }> {
     const text = payloadFor(WARMUP_TEXTS[i % WARMUP_TEXTS.length]!);
     const result = await inspectPayloadWithLaya(text, LAYA_URL, LAYA_API_KEY, {
       timeoutMs: WARMUP_CALL_TIMEOUT_MS,
+      ...(LAYA_MODEL ? { model: LAYA_MODEL } : {}),
     });
     if (result) {
       valid += 1;
@@ -564,7 +568,7 @@ async function main(): Promise<void> {
   console.log(
     `Aquecimento: ${(warmup.elapsedMs / 1000).toFixed(1)} s · checkpoints: ${warmup.seen.join(", ")}`
   );
-  console.log(`Backend: ${API_URL}`);
+  console.log(`Backend: ${API_URL} · checkpoint: ${LAYA_MODEL ?? "roteamento por idioma"}`);
   console.log(
     `Conjunto: ${DATASET_NAME} · casos: ${DATASET.length} · repetições por caso: ${REPS} · limiar noul ≥ ${LAYA_NOUL_THRESHOLD.toFixed(2)} · etapas: ${STAGES}\n`
   );

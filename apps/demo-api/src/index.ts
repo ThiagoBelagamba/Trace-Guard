@@ -19,6 +19,7 @@ init({
     redisUrl: process.env.REDIS_URL,
     layaSidecarUrl: process.env.LAYA_SIDECAR_URL?.trim() || undefined,
     layaApiKey: process.env.LAYA_API_KEY?.trim() || undefined,
+    layaModel: process.env.LAYA_MODEL?.trim() || undefined,
   },
 });
 

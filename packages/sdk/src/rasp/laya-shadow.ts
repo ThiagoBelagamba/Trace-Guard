@@ -37,6 +37,8 @@ export interface LayaShadowJob {
   path: string;
   layaUrl: string;
   apiKey?: string;
+  /** Checkpoint forçado (R7); sem ele o sidecar escolhe pelo idioma. */
+  model?: string;
   gate: LayaGate;
   inspect?: typeof inspectPayloadWithLaya;
   enqueue: (event: RaspEvent) => void;
@@ -98,7 +100,7 @@ async function inspectInBackground(job: LayaShadowJob, text: string): Promise<vo
   if (!job.gate.tryAcquire()) return;
   try {
     const inspect = job.inspect ?? inspectPayloadWithLaya;
-    const result = await inspect(text, job.layaUrl, job.apiKey);
+    const result = await inspect(text, job.layaUrl, job.apiKey, job.model ? { model: job.model } : undefined);
     if (!result?.flagged || !result.threatType) return;
     job.enqueue(toEvent(job, result));
     await job.flush();

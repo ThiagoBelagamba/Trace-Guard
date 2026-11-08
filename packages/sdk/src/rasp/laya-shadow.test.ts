@@ -152,6 +152,21 @@ describe("scheduleLayaInspection", () => {
   });
 });
 
+describe("scheduleLayaInspection checkpoint", () => {
+  it("passes the configured checkpoint to the inspector", async () => {
+    const seen: (string | undefined)[] = [];
+    job({
+      model: "english",
+      inspect: async (_text, _url, _key, options) => {
+        seen.push(options?.model);
+        return null;
+      },
+    });
+    await settle();
+    expect(seen).toEqual(["english"]);
+  });
+});
+
 describe("extractInspectableText", () => {
   it("sends the message value instead of the json envelope", () => {
     expect(extractInspectableText({ message: "  oi  " })).toBe("oi");

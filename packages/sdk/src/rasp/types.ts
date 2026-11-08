@@ -10,6 +10,8 @@ export interface RaspConfig {
   /** Vazio desliga a inspeção semântica. A heurística não depende deste campo. */
   layaSidecarUrl?: string;
   layaApiKey?: string;
+  /** Força um checkpoint do Laya (ex.: "english"). Vazio = roteamento por idioma. */
+  layaModel?: string;
   layaMaxInFlight?: number;
 }
 

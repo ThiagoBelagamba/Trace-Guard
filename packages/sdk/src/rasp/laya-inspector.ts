@@ -34,6 +34,8 @@ export interface LayaInspectOptions {
   fetchImpl?: typeof fetch;
   timeoutMs?: number;
   now?: () => number;
+  /** Força um checkpoint (`model` no corpo). Sem ele, o sidecar roteia por idioma. */
+  model?: string;
 }
 
 /**
@@ -135,6 +137,7 @@ export async function inspectPayloadWithLaya(
         state: { prompt: payloadText },
         min_confidence: LAYA_MIN_CONFIDENCE,
         questions: GUARD_QUESTIONS,
+        ...(options?.model ? { model: options.model } : {}),
       }),
       signal: AbortSignal.timeout(options?.timeoutMs ?? LAYA_TIMEOUT_MS),
     });
