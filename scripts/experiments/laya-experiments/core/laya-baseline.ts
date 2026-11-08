@@ -11,7 +11,7 @@ import type {
   LayaInspectOptions,
   LayaQuestionId,
   LayaSignal,
-} from "../../packages/sdk/src/rasp/laya-inspector.ts";
+} from "../../../../packages/sdk/src/rasp/laya-inspector.ts";
 import type { VerdictPolicy } from "./laya-stats.ts";
 
 const BASELINE_THRESHOLD = 0.8;

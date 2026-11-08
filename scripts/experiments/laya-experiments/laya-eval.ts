@@ -26,18 +26,18 @@ import { existsSync, mkdirSync, writeFileSync } from "node:fs";
 import http from "node:http";
 import net from "node:net";
 import path from "node:path";
-import type { ClassificationMetrics } from "../../packages/shared/src/metrics.ts";
-import type { RaspEvent } from "../../packages/shared/src/rasp.ts";
+import type { ClassificationMetrics } from "../../../packages/shared/src/metrics.ts";
+import type { RaspEvent } from "../../../packages/shared/src/rasp.ts";
 import {
   inspectPayloadWithLaya,
   LAYA_NOUL_THRESHOLD,
   type LayaInspectionResult,
   type LayaThresholds,
-} from "../../packages/sdk/src/rasp/laya-inspector.ts";
-import { extractInspectableText, type LayaShadowCounters } from "../../packages/sdk/src/rasp/laya-shadow.ts";
-import { detectSecretPatterns } from "../../packages/sdk/src/rasp/secret-patterns.ts";
-import { LAYA_DATASET, type LayaCase } from "./laya-dataset.ts";
-import { checkDatasetIntegrity, loadLayaDatasetFile } from "./laya-dataset-loader.ts";
+} from "../../../packages/sdk/src/rasp/laya-inspector.ts";
+import { extractInspectableText, type LayaShadowCounters } from "../../../packages/sdk/src/rasp/laya-shadow.ts";
+import { detectSecretPatterns } from "../../../packages/sdk/src/rasp/secret-patterns.ts";
+import { LAYA_DATASET, type LayaCase } from "./core/laya-dataset.ts";
+import { checkDatasetIntegrity, loadLayaDatasetFile } from "./core/laya-dataset-loader.ts";
 import {
   brierScore,
   buildAccuracyReport,
@@ -57,9 +57,10 @@ import {
   type LatencySummary,
   type SentCase,
   type VerdictPolicy,
-} from "./laya-stats.ts";
-import { BASELINE_POLICY, inspectBaseline } from "./laya-baseline.ts";
-import { configPath, REGISTRY_DIR, type DatasetName, type LayaResult } from "./laya-registry.ts";
+} from "./core/laya-stats.ts";
+import { BASELINE_POLICY, inspectBaseline } from "./core/laya-baseline.ts";
+import { LAYA_DATA_DIR, REGISTRY_DIR, TEST_FILE, VALIDATION_FILE } from "./paths.ts";
+import { configPath, type DatasetName, type LayaResult } from "./registry/laya-registry.ts";
 import {
   assertCommitted,
   cleanCommit,
@@ -69,9 +70,8 @@ import {
   refuseTestOverwrite,
   resolveRunPlan,
   sdkPolicy,
-  TEST_FILE,
   type RunPlan,
-} from "./laya-run-config.ts";
+} from "./registry/laya-run-config.ts";
 
 const LAYA_URL = (process.env.LAYA_SIDECAR_URL ?? "http://localhost:8000").replace(/\/$/, "");
 const LAYA_API_KEY = process.env.LAYA_API_KEY ?? "traceguard-secret";
@@ -90,7 +90,6 @@ const REPS = Math.max(1, parseInt(process.env.LAYA_REPS ?? "1", 10) || 1);
 /** O caminho quente mede tempo de resposta, que varia: mantém 3 amostras por texto. */
 const HOT_PATH_REPS = 3;
 let datasetName: string = process.env.LAYA_DATASET ?? "dev";
-const VALIDATION_FILE = path.join("scripts", "experiments", "data", "laya-validation.json");
 let stages = process.env.LAYA_STAGES ?? "all";
 /** GET /api/v1/rasp/events devolve no máximo 100 eventos. */
 const MAX_INTEGRATION_TEXTS = 100;
@@ -116,7 +115,7 @@ function resolveDataset(): readonly LayaCase[] {
 
 function loadChecked(file: string, label: string, opts: Parameters<typeof checkDatasetIntegrity>[1]): LayaCase[] {
   if (!existsSync(file)) {
-    throw new Error(`${file} não encontrado. Veja scripts/experiments/data/README.md.`);
+    throw new Error(`${file} não encontrado. Veja ${LAYA_DATA_DIR}/README.md.`);
   }
   const cases = loadLayaDatasetFile(file);
   const problems = checkDatasetIntegrity(cases, opts);

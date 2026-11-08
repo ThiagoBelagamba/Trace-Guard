@@ -9,10 +9,11 @@
 import { readFileSync, writeFileSync } from "node:fs";
 import path from "node:path";
 import { pathToFileURL } from "node:url";
-import type { LayaThresholds } from "../../packages/sdk/src/rasp/laya-inspector.ts";
-import { LAYA_DATASET, type LayaCase } from "./laya-dataset.ts";
-import { loadLayaDatasetFile } from "./laya-dataset-loader.ts";
-import { configPath, REGISTRY_DIR, type ResultMetrics } from "./laya-registry.ts";
+import type { LayaThresholds } from "../../../../packages/sdk/src/rasp/laya-inspector.ts";
+import { LAYA_DATASET, type LayaCase } from "../core/laya-dataset.ts";
+import { loadLayaDatasetFile } from "../core/laya-dataset-loader.ts";
+import { REGISTRY_DIR, VALIDATION_FILE } from "../paths.ts";
+import { configPath, type ResultMetrics } from "./laya-registry.ts";
 import { parseCaseScores, verdictFromScore, type CaseScore } from "./laya-rescore.ts";
 import { configCommit } from "./laya-run-config.ts";
 
@@ -135,7 +136,6 @@ export function writeThresholds(
   writeFileSync(file, `${JSON.stringify(config, null, 2)}\n`, "utf8");
 }
 
-const VALIDATION_FILE = path.join("scripts", "experiments", "data", "laya-validation.json");
 const fmt = (v: number) => v.toFixed(3).replace(".", ",");
 
 function main(): void {

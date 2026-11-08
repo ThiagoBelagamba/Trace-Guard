@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import type { LayaCase } from "./laya-dataset.ts";
+import type { LayaCase } from "../core/laya-dataset.ts";
 import {
   mergeScores,
   metricsFor,

@@ -7,11 +7,11 @@
 import { readFileSync, writeFileSync } from "node:fs";
 import path from "node:path";
 import { pathToFileURL } from "node:url";
-import { LAYA_DATASET, type LayaCase } from "./laya-dataset.ts";
-import { loadLayaDatasetFile } from "./laya-dataset-loader.ts";
+import { LAYA_DATASET, type LayaCase } from "../core/laya-dataset.ts";
+import { loadLayaDatasetFile } from "../core/laya-dataset-loader.ts";
+import { REGISTRY_DIR, VALIDATION_FILE } from "../paths.ts";
 import {
   loadLayaConfig,
-  REGISTRY_DIR,
   type DatasetName,
   type LayaConfig,
   type LayaResult,
@@ -23,8 +23,6 @@ import {
   parseLatency,
   type OutputSection,
 } from "./laya-rescore.ts";
-
-const VALIDATION_FILE = path.join("scripts", "experiments", "data", "laya-validation.json");
 
 interface Source {
   /** Saída bruta, relativa a REGISTRY_DIR. */

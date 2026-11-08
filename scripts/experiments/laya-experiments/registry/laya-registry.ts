@@ -7,9 +7,11 @@
  */
 import { readdirSync, readFileSync } from "node:fs";
 import path from "node:path";
-import type { LayaThresholds } from "../../packages/sdk/src/rasp/laya-inspector.ts";
+import type { LayaThresholds } from "../../../../packages/sdk/src/rasp/laya-inspector.ts";
 
-export const REGISTRY_DIR = path.join("docs", "tcc", "experimento-4-registro");
+import { REGISTRY_DIR } from "../paths.ts";
+
+export { REGISTRY_DIR };
 
 export type ConfigStatus = "referencia" | "pre-registrada" | "exploratoria";
 export type Checkpoint = "roteamento" | "multilingual" | "english" | "multilingual-cal" | "english-cal";

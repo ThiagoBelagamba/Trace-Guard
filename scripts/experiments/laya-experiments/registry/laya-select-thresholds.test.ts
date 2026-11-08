@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import type { LayaCase } from "./laya-dataset.ts";
+import type { LayaCase } from "../core/laya-dataset.ts";
 import type { CaseScore } from "./laya-rescore.ts";
 import { compareSelections, selectThresholds, writeThresholds, type Selection } from "./laya-select-thresholds.ts";
 

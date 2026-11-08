@@ -1,10 +1,10 @@
 import { describe, expect, it } from "vitest";
-import type { RaspEvent } from "../../packages/shared/src/rasp.ts";
-import type { LayaInspectionResult } from "../../packages/sdk/src/rasp/laya-inspector.ts";
+import type { RaspEvent } from "../../../../packages/shared/src/rasp.ts";
+import type { LayaInspectionResult } from "../../../../packages/sdk/src/rasp/laya-inspector.ts";
 import type { LayaCase } from "./laya-dataset.ts";
 import { BASELINE_POLICY } from "./laya-baseline.ts";
 import { LAYA_DATASET } from "./laya-dataset.ts";
-import { detectSecretPatterns } from "../../packages/sdk/src/rasp/secret-patterns.ts";
+import { detectSecretPatterns } from "../../../../packages/sdk/src/rasp/secret-patterns.ts";
 import {
   brierScore,
   buildAccuracyReport,

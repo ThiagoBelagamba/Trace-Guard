@@ -5,17 +5,15 @@
  */
 import { execFileSync } from "node:child_process";
 import { existsSync } from "node:fs";
-import path from "node:path";
 import {
   isHit,
   LAYA_NOUL_THRESHOLD,
   pickThreatType,
   type LayaThresholds,
-} from "../../packages/sdk/src/rasp/laya-inspector.ts";
+} from "../../../../packages/sdk/src/rasp/laya-inspector.ts";
 import { loadLayaConfig, type DatasetName, type LayaConfig, type ResultMetrics } from "./laya-registry.ts";
-import type { AccuracyReport, LatencySummary, VerdictPolicy } from "./laya-stats.ts";
+import type { AccuracyReport, LatencySummary, VerdictPolicy } from "../core/laya-stats.ts";
 
-export const TEST_FILE = path.join("scripts", "experiments", "data", "laya-test.json");
 
 export interface RunPlan {
   config: LayaConfig;

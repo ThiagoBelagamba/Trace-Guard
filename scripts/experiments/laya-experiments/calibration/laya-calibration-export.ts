@@ -9,9 +9,9 @@
 import { mkdirSync, writeFileSync } from "node:fs";
 import path from "node:path";
 import { pathToFileURL } from "node:url";
-import type { LayaQuestionId } from "../../packages/sdk/src/rasp/laya-inspector.ts";
-import { extractInspectableText } from "../../packages/sdk/src/rasp/laya-shadow.ts";
-import { LAYA_DATASET, type LayaCase } from "./laya-dataset.ts";
+import type { LayaQuestionId } from "../../../../packages/sdk/src/rasp/laya-inspector.ts";
+import { extractInspectableText } from "../../../../packages/sdk/src/rasp/laya-shadow.ts";
+import { LAYA_DATASET, type LayaCase } from "../core/laya-dataset.ts";
 
 const OUT_FILE = path.join(".cache", "laya", "calibration", "dev.jsonl");
 

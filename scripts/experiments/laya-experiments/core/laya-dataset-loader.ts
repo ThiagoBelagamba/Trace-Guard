@@ -6,7 +6,7 @@
  * para o arquivo não casar com o secret scanning do GitHub.
  */
 import { readFileSync } from "node:fs";
-import { LAYA_MAX_PAYLOAD_CHARS } from "../../packages/sdk/src/rasp/laya-shadow.ts";
+import { LAYA_MAX_PAYLOAD_CHARS } from "../../../../packages/sdk/src/rasp/laya-shadow.ts";
 import type { LayaCase, LayaLabel } from "./laya-dataset.ts";
 
 const LABELS: readonly LayaLabel[] = ["prompt_injection", "secret_leak", "benign"];

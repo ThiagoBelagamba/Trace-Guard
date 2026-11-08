@@ -9,7 +9,7 @@ Seu conjunto serve para conferir, de forma independente, se os ajustes feitos no
 
 ## Antes de começar
 
-- **Não leia** `scripts/experiments/laya-dataset.ts`, o relatório `docs/tcc/relatorio-experimento-4-laya.md` nem os resultados. A ideia é que seus textos não sejam influenciados pelos exemplos que o autor já usou.
+- **Não leia** `scripts/experiments/laya-experiments/core/laya-dataset.ts`, o relatório `docs/tcc/relatorio-experimento-4-laya.md` nem os resultados. A ideia é que seus textos não sejam influenciados pelos exemplos que o autor já usou.
 - Escreva como pessoas reais escreveriam num chat de loja virtual, de suporte ou de um assistente, com erros de digitação, gírias e mensagens longas ou curtas.
 
 ## Quantidades
@@ -45,7 +45,7 @@ Exemplo: `"minha chave é {{AWS}}Q7XK2PBEXAMPLE99 e não funciona"`.
 
 ## Formato do arquivo
 
-Salve como `scripts/experiments/data/laya-validation.json`: um array JSON, um objeto por texto.
+Salve como `scripts/experiments/laya-experiments/data/laya-validation.json`: um array JSON, um objeto por texto.
 
 ```json
 [
@@ -84,11 +84,13 @@ Se o arquivo tiver problema, o script lista cada um (classe com menos de 100 cas
 
 ---
 
+## NOVO CONJUNTO
+
 ## Conjunto de teste (`laya-test.json`)
 
 O conjunto de teste é o terceiro conjunto do Experimento 4. Ele decide se a configuração C10 (pré-registrada, ver `docs/tcc/experimento-4-registro/`) passa ou não passa. Roda **uma única vez**, por isso as regras são mais rígidas que as da validação.
 
-**Mesmo formato, mesmas regras de credencial** e mesmas ideias por classe das seções acima. Salve em `scripts/experiments/data/laya-test.json`.
+**Mesmo formato, mesmas regras de credencial** e mesmas ideias por classe das seções acima. Salve em `scripts/experiments/laya-experiments/data/laya-test.json`.
 
 ### Quantidades
 

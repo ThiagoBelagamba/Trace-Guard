@@ -5,16 +5,16 @@
 import {
   computeClassificationMetrics,
   type ClassificationMetrics,
-} from "../../packages/shared/src/metrics.ts";
-import type { RaspEvent } from "../../packages/shared/src/rasp.ts";
+} from "../../../../packages/shared/src/metrics.ts";
+import type { RaspEvent } from "../../../../packages/shared/src/rasp.ts";
 import {
   isHit,
   pickThreatType,
   type LayaInspectionResult,
   type LayaSignal,
-} from "../../packages/sdk/src/rasp/laya-inspector.ts";
+} from "../../../../packages/sdk/src/rasp/laya-inspector.ts";
 import type { LayaCase } from "./laya-dataset.ts";
-import type { LayaShadowCounters } from "../../packages/sdk/src/rasp/laya-shadow.ts";
+import type { LayaShadowCounters } from "../../../../packages/sdk/src/rasp/laya-shadow.ts";
 
 export type SemanticThreat = "prompt_injection" | "secret_leak";
 

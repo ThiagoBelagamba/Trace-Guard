@@ -3,7 +3,7 @@ import { describe, expect, it } from "vitest";
 import {
   extractInspectableText,
   LAYA_MAX_PAYLOAD_CHARS,
-} from "../../packages/sdk/src/rasp/laya-shadow.ts";
+} from "../../../../packages/sdk/src/rasp/laya-shadow.ts";
 import { LAYA_DATASET, type LayaLabel } from "./laya-dataset.ts";
 
 function byLabel(label: LayaLabel) {
