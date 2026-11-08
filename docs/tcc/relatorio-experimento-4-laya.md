@@ -566,15 +566,88 @@ No conjunto de validação (`scripts/experiments/data/laya-validation.json`, tex
 
 Execução prevista: `LAYA_DATASET=validation LAYA_STAGES=accuracy pnpm experiment:laya`, com 1 repetição por texto (o modelo é determinístico, §6.1) e as duas variantes da §13 lado a lado. O veredito é dado por condição. Se alguma falhar, R1–R3 não são reportados como ganho na monografia.
 
-### 14.2 Resultado
+### 14.2 Conjunto de validação
 
-*Pendente: aguarda o conjunto de validação.*
+`scripts/experiments/data/laya-validation.json`: 316 textos (106 `prompt_injection`, 104 `secret_leak`, 106 legítimos, dos quais 54 difíceis), metade em português e metade em inglês. `checkDatasetIntegrity` não apontou problemas: mínimo de 100 por classe, nenhum id ou texto repetido, nenhuma credencial sem `EXAMPLE` e nenhuma sobreposição com o conjunto de desenvolvimento.
+
+Execução: `LAYA_DATASET=validation LAYA_STAGES=accuracy pnpm experiment:laya`, 1 repetição por texto, roteamento por idioma (169 chamadas ao `multilingual` e 147 ao `english`) e nenhuma chamada com falha.
+
+| Métrica | SDK atual (R1–R5) | Linha de base (pré-R1) | SDK + padrões (R10) |
+|---|---:|---:|---:|
+| TP / FP / FN / TN | 171 / 15 / 39 / 91 | 73 / 8 / 137 / 98 | 178 / 16 / 32 / 90 |
+| Precisão | 0,919 | 0,901 | 0,918 |
+| Recall | 0,814 | 0,348 | 0,848 |
+| F1 | 0,864 | 0,502 | 0,881 |
+| Youden | 0,673 | 0,272 | 0,697 |
+| Recall `prompt_injection` | 0,792 | 0,434 | 0,792 |
+| Recall `secret_leak` | 0,615 | 0,144 | 0,721 |
+| FP em legítimos difíceis | 15/54 | 8/54 | 16/54 |
+| Tipo correto | 134/171 | 57/73 | 145/178 |
+| Recall PT / EN | 87,6% / 75,2% | 39,0% / 30,5% | — |
+| Latência do modelo, média / p95 (ms) | 784 / 1.564 | 633 / 1.286 | 784 / 1.564 |
+
+O recall de `secret_leak` é a fração de credenciais em que o sinal `sensitive_data` passou do limiar. É a mesma métrica para as duas configurações.
+
+### 14.3 Aplicação do critério pré-registrado
+
+| Condição | Linha de base | SDK atual | Exigido | Veredito |
+|---|---:|---:|---:|---|
+| 1. F1 binário | 0,502 | 0,864 | ≥ 0,602 | **funcionou** (+0,362) |
+| 2. Recall de `secret_leak` | 0,144 | 0,615 | ≥ 0,344 | **funcionou** (+0,471) |
+| 3. Taxa de FP em legítimos difíceis | 0,148 (8/54) | 0,278 (15/54) | ≤ 0,198 | **não funcionou** (+0,130) |
+
+**Veredito: pelo critério pré-registrado, os ajustes R1–R3 não funcionaram.** Duas das três condições valem, mas a terceira falhou. Seriam aceitos no máximo 10 falsos positivos em 54 legítimos difíceis, e houve 15. Como fixado na §14.1, R1–R3 não são reportados como ganho na monografia. O resultado pode ser descrito como troca: o recall mais que dobrou (0,348 → 0,814), ao custo de quase o dobro de alarmes falsos nos textos difíceis.
+
+O critério não foi alterado depois da execução.
+
+### 14.4 Desenvolvimento × validação
+
+| Métrica (SDK atual) | Desenvolvimento (§13) | Validação |
+|---|---:|---:|
+| F1 | 0,909 | 0,864 |
+| Recall `secret_leak` | 0,900 | 0,615 |
+| FP em legítimos difíceis | 2/10 (20%) | 15/54 (28%) |
+
+A queda confirma a ressalva da §10: parte do ganho medido nos 40 textos vinha de as perguntas terem sido escolhidas olhando esses mesmos textos. A linha de base também caiu (F1 de 0,684 para 0,502). A validação é mais difícil que o desenvolvimento para as duas configurações.
+
+### 14.5 Onde o SDK erra
+
+**Falsos positivos.** Todos os 15 estão nos legítimos difíceis; nenhum dos 52 legítimos comuns foi marcado. Eles se dividem em dois grupos, os mesmos padrões da §6.5:
+
+- **Texto que fala de ataque, marcado como `prompt_injection` (6):** citação em notícia (2), resumo de artigo, *roleplay* inofensivo, pergunta de segurança e hash de commit.
+- **Texto que fala de credencial sem conter uma, marcado como `secret_leak` (9):** chave pública (2), `.env.example`, configuração com *placeholder*, política de senha, redefinição de senha, código sem segredo, chave PIX para reembolso e "modo desenvolvedor" do celular.
+
+**Credenciais perdidas.** O sinal `sensitive_data` falhou em 40 das 104 credenciais: **36 em inglês e 4 em português**. Dessas, 22 ainda foram detectadas pela pergunta de injeção, com o tipo errado. O motivo é o roteamento. Os textos em inglês vão para o checkpoint `english`, que é fraco em `sensitive_data`. Com o `multilingual` forçado, o mesmo sinal perde só 5 credenciais em inglês (§15).
+
+**Injeções perdidas.** Foram 22, espalhadas por categorias (extração de *system prompt*, falso desenvolvedor, urgência ou autoridade, injeção por delimitador, entre outras). Nenhuma categoria concentra os erros.
 
 ---
 
 ## 15. Checkpoint forçado (R7)
 
-*Pendente: aguarda o conjunto de validação. Execuções previstas com `LAYA_DATASET=validation LAYA_STAGES=accuracy`: roteamento por idioma, `LAYA_MODEL=english` e `LAYA_MODEL=multilingual`.*
+Conjunto de validação, SDK atual, limiar 0,85, 1 repetição. As três configurações usam as mesmas perguntas e só mudam o checkpoint.
+
+| Métrica | Roteamento por idioma | `english` forçado | `multilingual` forçado |
+|---|---:|---:|---:|
+| TP / FP / FN / TN | 171 / 15 / 39 / 91 | 167 / 21 / 43 / 85 | 184 / 20 / 26 / 86 |
+| Precisão | 0,919 | 0,888 | 0,902 |
+| Recall | 0,814 | 0,795 | 0,876 |
+| F1 | 0,864 | 0,839 | **0,889** |
+| Recall `prompt_injection` | 0,792 | **0,915** | 0,755 |
+| Recall `secret_leak` | 0,615 | 0,260 | **0,913** |
+| FP em legítimos difíceis | **15/54** | 19/54 | 19/54 |
+| Recall PT / EN | 87,6% / 75,2% | 87,6% / 71,4% | 87,6% / 87,6% |
+| Latência do modelo, média / p95 (ms) | 784 / 1.564 | 1.235 / 1.884 | **423 / 680** |
+
+**Leitura:**
+
+- **Cada checkpoint é bom numa pergunta e fraco na outra.** O `english` é o melhor em injeção (0,915) e o pior em credencial (0,260). O `multilingual` é o contrário (0,755 e 0,913). O roteamento por idioma junta o pior dos dois nos textos em inglês: lá o sinal de credencial depende do `english`.
+- **O `multilingual` forçado teve o maior F1 e foi 46% mais rápido** que o roteamento (423 ms de média contra 784 ms; o `english` sozinho leva 1.235 ms). Também deixa só um checkpoint em uso, em vez de dois (os dois juntos ocupam ~3,2 GB; o consumo de um só não foi medido).
+- **O custo são mais falsos positivos:** 19/54 contra 15/54. Nenhum dos três checkpoints passaria na condição 3 do critério (máximo de 10/54).
+
+**Combinação exploratória** (escolhida depois de ver estes números, portanto não vale como resultado): sinal de injeção do roteamento e sinal de credencial do `multilingual`, montada a partir das notas já registradas. Deu F1 0,910, recall de `secret_leak` 0,913 e 14/54 FP em difíceis. Para implementar, o SDK teria de fazer duas chamadas ao sidecar ou o sidecar teria de aceitar checkpoint por pergunta. Também não passaria na condição 3.
+
+**Recomendação:** forçar `LAYA_MODEL=multilingual`. Isso troca 4 FP a mais em 54 textos difíceis por +0,30 de recall em credenciais, metade da latência e um checkpoint a menos. A troca só vale se os alertas forem revisados por alguém. Como o modo sombra só registra e nunca bloqueia, isso é compatível com a ADR 009.
 
 ---
 
@@ -599,7 +672,27 @@ A escala de temperatura é monotônica: a ordem das notas e a AUC **não mudam**
 
 ### 16.2 Avaliação no conjunto de validação
 
-*Pendente: `LAYA_MODEL` = `multilingual`, `multilingual-cal`, `english` e `english-cal`, com `LAYA_STAGES=accuracy LAYA_DATASET=validation`. O ajuste foi feito no desenvolvimento e a avaliação é na validação, sem vazamento.*
+As temperaturas foram ajustadas no conjunto de desenvolvimento e avaliadas aqui, sem vazamento. Os dados são do SDK atual, com limiar 0,85.
+
+| Métrica | `english` | `english-cal` | `multilingual` | `multilingual-cal` |
+|---|---:|---:|---:|---:|
+| TP / FP / FN / TN | 167 / 21 / 43 / 85 | 142 / 8 / 68 / 98 | 184 / 20 / 26 / 86 | 125 / 6 / 85 / 100 |
+| Precisão | 0,888 | 0,947 | 0,902 | 0,954 |
+| Recall | 0,795 | 0,676 | 0,876 | 0,595 |
+| F1 | 0,839 | 0,789 | **0,889** | 0,733 |
+| Recall `prompt_injection` | 0,915 | 0,792 | 0,755 | 0,340 |
+| Recall `secret_leak` | 0,260 | 0,010 | 0,913 | 0,615 |
+| FP em legítimos difíceis | 19/54 | 7/54 | 19/54 | **5/54** |
+| Brier PI / SL | 0,318 / 0,141 | 0,299 / 0,164 | 0,417 / 0,151 | 0,372 / 0,145 |
+| ECE PI / SL | 0,334 / 0,070 | 0,343 / 0,149 | 0,407 / 0,169 | 0,331 / 0,186 |
+
+**Leitura:**
+
+- **A calibração não melhorou a calibração de forma consistente.** No `multilingual`, o Brier e o ECE de PI caíram (0,417 → 0,372 e 0,407 → 0,331). No `english`, o ECE de SL dobrou (0,070 → 0,149). Uma temperatura única para as três perguntas não corrige um modelo que é confiante demais numa pergunta e fraco em outra. Além disso, o ajuste bateu no teto de 5,0 (§16.1), então nem chegou ao valor que o NLL pedia.
+- **O efeito prático foi como subir o limiar.** A escala é monotônica, então calibrar equivale a exigir notas mais altas e a abster-se mais. Por isso a precisão subiu e o recall caiu. O `english-cal` praticamente parou de marcar credenciais (recall 0,010).
+- **O `multilingual-cal` foi a única configuração da validação que atende às três condições do critério:** F1 0,733 ≥ 0,602, recall de `secret_leak` 0,615 ≥ 0,344 e FP 5/54 = 0,093 ≤ 0,198. Mas essa configuração não é a que o critério pré-registrou (R1–R3 com roteamento), e o recall de injeção cai para 0,340, abaixo da linha de base (0,434). Para virar resultado, precisaria de um terceiro conjunto de textos.
+
+**Varredura exploratória de limiar** (feita sobre as notas registradas nesta validação, portanto otimista): no roteamento, a condição 3 só passa com limiar 0,97. Nesse ponto o F1 cai para 0,801 e o recall de `secret_leak` para 0,490, e as três condições valeriam. Escolher o limiar olhando a validação repete o problema da §10, então isso não é reportado como resultado.
 
 ---
 
@@ -636,7 +729,34 @@ Os padrões rodam antes do gate, então valem também para os 116 descartados.
 
 ### 17.2 Conjunto de validação
 
-*Pendente: aguarda o conjunto de validação (§14).*
+| Métrica | SDK atual | SDK + padrões (R10) |
+|---|---:|---:|
+| TP / FP / FN / TN | 171 / 15 / 39 / 91 | 178 / 16 / 32 / 90 |
+| F1 | 0,864 | 0,881 |
+| Recall | 0,814 | 0,848 |
+| Recall `secret_leak` | 0,615 | 0,721 |
+| FP em legítimos difíceis | 15/54 | 16/54 |
+| Tipo correto | 134/171 | 145/178 |
+
+Os padrões recuperaram 7 credenciais que o modelo não marcou e corrigiram o tipo de mais 4. O ganho em recall de `secret_leak` (+0,106) é parecido com o do desenvolvimento (+0,100), mas não fecha a lacuna: ainda faltam 29 credenciais. A validação tem muitos formatos que as 4 regex não cobrem: Stripe, JWT, `Bearer` em log, `.npmrc`, cookie de sessão, senha em SQL. Um falso positivo novo apareceu nos legítimos difíceis, e a condição 3 continua não passando com os padrões.
+
+Os padrões não substituem a correção do roteamento. Com o `multilingual` forçado (§15), o modelo sozinho já chega a 0,913 de recall de credencial.
+
+---
+
+## 18. Conclusão dos ajustes
+
+| Recomendação | Resultado na validação |
+|---|---|
+| R1–R3 (perguntas do preset, prioridade de SL, limiar 0,85) | **Não passou no critério pré-registrado.** F1 +0,362 e recall de SL +0,471, mas FP em difíceis +0,130 (máximo permitido: +0,05). |
+| R4, R5, R11 (aquecimento, texto extraído, tabela) | Correções de método; não têm critério próprio. A linha de base foi reproduzida exatamente (§13.1). |
+| R6 (calibração) | Não melhorou a calibração de forma consistente; funcionou como um limiar mais alto. Deixar desligada. |
+| R7 (checkpoint) | Achado principal: o `english` perde 36 de 52 credenciais em inglês. `multilingual` forçado: F1 0,889, recall de SL 0,913 e metade da latência, com 19/54 FP. |
+| R8 (cobertura) | Funciona: sob rajada, só 4 de 120 corpos chegam ao modelo, e agora isso aparece no `/health`. |
+| R9 (validação) | Cumpriu o papel: mostrou que o ganho do desenvolvimento era otimista. |
+| R10 (padrões) | Recall de SL +0,106 com 1 FP a mais; cobertura que não depende do gate. |
+
+**O que fica para a monografia:** a troca medida (recall de 0,348 para 0,814 contra FP em difíceis de 15% para 28%), o achado sobre o checkpoint `english` em credenciais e a recomendação de forçar `multilingual`, a ser confirmada num terceiro conjunto. O problema que nenhum ajuste resolveu é o mesmo da §6.5: o Laya julga o assunto do texto, não a ação. Texto que fala de ataque ou de senha continua sendo marcado.
 
 ---
 
