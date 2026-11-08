@@ -572,6 +572,74 @@ Execução prevista: `LAYA_DATASET=validation LAYA_STAGES=accuracy pnpm experime
 
 ---
 
+## 15. Checkpoint forçado (R7)
+
+*Pendente: aguarda o conjunto de validação. Execuções previstas com `LAYA_DATASET=validation LAYA_STAGES=accuracy`: roteamento por idioma, `LAYA_MODEL=english` e `LAYA_MODEL=multilingual`.*
+
+---
+
+## 16. Calibração (R6)
+
+### 16.1 Ajuste no conjunto de desenvolvimento
+
+`docker/laya/calibrate.py` ajustou a temperatura do tipo `noul` por NLL nos 40 textos × 3 perguntas (120 registros). Os registros vêm de `pnpm experiment:laya:export-calibration`. A ordem das opções `[false, true]` foi confirmada numa injeção óbvia: logits −5,45 / 18,53 no `english` e −4,64 / 0,40 no `multilingual`.
+
+| Checkpoint | T original (`noul`) | T pedida pelo ajuste | T aplicada |
+|---|---:|---:|---:|
+| `english` | 1,98 | 20,68 | 5,00 (teto do `laya`) |
+| `multilingual` | 1,00 | 26,14 | 5,00 (teto do `laya`) |
+
+Os dois ajustes bateram no teto, ou seja, as notas do modelo são confiantes demais: o NLL pedia achatá-las de 10 a 26 vezes. O ECE interno do `laya` saiu NaN, porque com menos de 2.000 registros não sobra conjunto de avaliação. As temperaturas dos outros tipos de pergunta foram mantidas.
+
+Os checkpoints calibrados ficam em `.cache/laya/calibrated/{english,multilingual}` e são servidos como `english-cal` e `multilingual-cal` via `LAYA_EXTRA_MODELS`. Teste rápido: na injeção óbvia, `english` dá 1,000 e `english-cal` dá 0,9918, que é sigmoid(24/5).
+
+No conjunto de desenvolvimento, sem calibração, as notas do SDK tiveram Brier 0,295 e ECE 0,332 em PI, e Brier 0,147 e ECE 0,202 em SL.
+
+A escala de temperatura é monotônica: a ordem das notas e a AUC **não mudam**. Mudam o significado do limiar 0,85 e as abstenções. Com T = 5, uma nota só passa de 0,85 se a diferença de logits for maior que 8,7.
+
+### 16.2 Avaliação no conjunto de validação
+
+*Pendente: `LAYA_MODEL` = `multilingual`, `multilingual-cal`, `english` e `english-cal`, com `LAYA_STAGES=accuracy LAYA_DATASET=validation`. O ajuste foi feito no desenvolvimento e a avaliação é na validação, sem vazamento.*
+
+---
+
+## 17. Padrões + Laya (R10)
+
+Quatro regex de formato fixo (`aws_access_key`, `github_token`, `url_credentials`, `private_key_block`) rodam no sombra antes do gate e geram um evento `source: "pattern"` sem o trecho casado (ADR 010). A coluna "SDK + padrões" soma esses acertos aos vereditos do SDK no mesmo texto extraído, sem chamar o sidecar de novo.
+
+### 17.1 Conjunto de desenvolvimento
+
+`LAYA_VARIANTS=sdk pnpm experiment:laya`, 1 repetição por texto.
+
+| Métrica | SDK atual (R1–R5) | SDK + padrões (R10) |
+|---|---:|---:|
+| TP / FP / FN / TN | 20 / 2 / 2 / 16 | 21 / 2 / 1 / 16 |
+| Precisão | 0,909 | 0,913 |
+| Recall | 0,909 | 0,955 |
+| F1 | 0,909 | 0,933 |
+| Recall `secret_leak` | 0,900 | 1,000 |
+| FP em legítimos difíceis | 2/10 | 2/10 |
+| Tipo correto | 18/20 | 19/21 |
+
+Sozinhos, os padrões acham 8 das 10 credenciais (os 2 `Bearer` ficam de fora) e nenhum dos 18 legítimos. Somados ao Laya, recuperam o `sl-github-en`, único falso negativo de credencial da §13.3, sem acrescentar falso positivo.
+
+Integração: 22 de 22 alertas do Laya entregues (100%), sem eventos inesperados. A diferença no caminho quente, ritmado − sem sidecar, foi de p50 +0,5 ms e p95 +0,9 ms.
+
+**Cobertura do sombra (R8)**, pelos contadores do SDK no `/health` da demo-api:
+
+- **Rajada:** 4 de 120 corpos inspecionados pelo Laya e 116 descartados pelo gate.
+- **Ritmado:** 40 de 40 inspecionados.
+
+Os padrões rodam antes do gate, então valem também para os 116 descartados.
+
+> Estes textos foram usados para escolher as perguntas (§13). Os números de credencial dependem de quais formatos aparecem no conjunto.
+
+### 17.2 Conjunto de validação
+
+*Pendente: aguarda o conjunto de validação (§14).*
+
+---
+
 ## Apêndice A — Método das sondagens complementares
 
 As sondagens das seções 6 e 7 chamaram `POST /v1/systemone` diretamente, com `Authorization: Bearer <LAYA_API_KEY>` e `min_confidence: 0.8`, nos 40 textos de `LAYA_DATASET`, com 1 chamada por texto e configuração (o modelo é determinístico).

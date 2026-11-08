@@ -32,6 +32,7 @@ import {
   type LayaInspectionResult,
 } from "../../packages/sdk/src/rasp/laya-inspector.ts";
 import { extractInspectableText, type LayaShadowCounters } from "../../packages/sdk/src/rasp/laya-shadow.ts";
+import { detectSecretPatterns } from "../../packages/sdk/src/rasp/secret-patterns.ts";
 import { LAYA_DATASET, type LayaCase } from "./laya-dataset.ts";
 import { checkDatasetIntegrity, loadLayaDatasetFile } from "./laya-dataset-loader.ts";
 import {
@@ -44,6 +45,7 @@ import {
   majorityVerdict,
   matchDeliveries,
   pendingCheckpoints,
+  withPatterns,
   SDK_POLICY,
   summarizeLatency,
   type AccuracyReport,
@@ -166,7 +168,7 @@ async function warmUpSidecar(): Promise<{ elapsedMs: number; seen: string[] }> {
  * na 4.3/4.4); `baseline` é a cópia congelada de antes dos ajustes R1–R5.
  */
 interface Variant {
-  id: "sdk" | "baseline";
+  id: "sdk" | "baseline" | "sdk_patterns";
   label: string;
   inspect(text: string): Promise<LayaInspectionResult | null>;
   policy: VerdictPolicy;
@@ -225,6 +227,21 @@ async function runAccuracyStage(variant: Variant): Promise<AccuracyRun> {
     DATASET.map((item) => ({ item, verdict: verdicts.get(item.id) ?? null }))
   );
   return { variant, verdicts, modelLatency: summarizeLatency(latencies), models, failedCalls, report };
+}
+
+/**
+ * R10: os vereditos do SDK somados aos padrões de credencial que o sombra
+ * avalia no mesmo texto extraído. Não chama o sidecar de novo.
+ */
+function withPatternsRun(sdk: AccuracyRun): AccuracyRun {
+  const verdicts = new Map<string, CaseVerdict | null>();
+  for (const item of DATASET) {
+    const verdict = sdk.verdicts.get(item.id) ?? null;
+    const hit = detectSecretPatterns(payloadFor(item.text)).length > 0;
+    verdicts.set(item.id, verdict ? withPatterns(verdict, hit) : null);
+  }
+  const report = buildAccuracyReport(DATASET.map((item) => ({ item, verdict: verdicts.get(item.id) ?? null })));
+  return { ...sdk, variant: { ...sdk.variant, id: "sdk_patterns", label: "SDK + padrões (R10)" }, verdicts, report };
 }
 
 function verdictLabel(verdict: CaseVerdict | null): string {
@@ -624,7 +641,8 @@ async function main(): Promise<void> {
     printAccuracy(run);
     runs.push(run);
   }
-  printComparison(runs);
+  const sdkRun = runs.find((r) => r.variant.id === "sdk");
+  printComparison(sdkRun ? [...runs, withPatternsRun(sdkRun)] : runs);
   const { verdicts, modelLatency } = runs[0]!;
   if (STAGES === "accuracy") {
     console.log("\nEtapas 4.3 e 4.4 puladas (LAYA_STAGES=accuracy).");

@@ -3,6 +3,8 @@ import type { RaspEvent } from "../../packages/shared/src/rasp.ts";
 import type { LayaInspectionResult } from "../../packages/sdk/src/rasp/laya-inspector.ts";
 import type { LayaCase } from "./laya-dataset.ts";
 import { BASELINE_POLICY } from "./laya-baseline.ts";
+import { LAYA_DATASET } from "./laya-dataset.ts";
+import { detectSecretPatterns } from "../../packages/sdk/src/rasp/secret-patterns.ts";
 import {
   brierScore,
   buildAccuracyReport,
@@ -13,6 +15,7 @@ import {
   majorityVerdict,
   matchDeliveries,
   pendingCheckpoints,
+  withPatterns,
   summarizeLatency,
   type CaseVerdict,
   type SentCase,
@@ -328,5 +331,31 @@ describe("diffShadowStats", () => {
       timedOut: 1,
       flagged: 9,
     });
+  });
+});
+
+describe("credential patterns on the dev set", () => {
+  const hits = (label: LayaCase["label"]) =>
+    LAYA_DATASET.filter((c) => c.label === label && detectSecretPatterns(c.text).length > 0);
+
+  it("catch 8 of the 10 secret leaks, all but the bearer headers", () => {
+    const missed = LAYA_DATASET.filter((c) => c.label === "secret_leak" && detectSecretPatterns(c.text).length === 0);
+    expect(hits("secret_leak")).toHaveLength(8);
+    expect(missed.map((c) => c.category)).toEqual(["bearer_header", "bearer_header"]);
+  });
+
+  it("flag none of the benign texts", () => {
+    expect(hits("benign")).toEqual([]);
+  });
+});
+
+describe("withPatterns", () => {
+  it("turns a benign verdict into secret_leak on a pattern hit", () => {
+    expect(withPatterns(verdict(false), true)).toMatchObject({ flagged: true, slHit: true, threatType: "secret_leak" });
+  });
+
+  it("leaves the verdict alone without a hit", () => {
+    const v = verdict(true, true);
+    expect(withPatterns(v, false)).toBe(v);
   });
 });

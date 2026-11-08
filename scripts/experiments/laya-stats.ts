@@ -292,3 +292,9 @@ export function diffShadowStats(before: LayaShadowCounters, after: LayaShadowCou
     flagged: after.flagged - before.flagged,
   };
 }
+
+/** Veredito do SDK somado aos padrões de credencial (R10): um acerto de padrão vira secret_leak. */
+export function withPatterns(verdict: CaseVerdict, patternHit: boolean): CaseVerdict {
+  if (!patternHit) return verdict;
+  return { ...verdict, flagged: true, slHit: true, threatType: "secret_leak" };
+}

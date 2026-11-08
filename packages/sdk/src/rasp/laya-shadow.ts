@@ -3,6 +3,7 @@ import {
   inspectPayloadWithLaya,
   type LayaInspectionResult,
 } from "./laya-inspector.js";
+import { detectSecretPatterns, type SecretPatternName } from "./secret-patterns.js";
 
 export const LAYA_MAX_PAYLOAD_CHARS = 8_000;
 const TEXT_METHODS = new Set(["POST", "PUT", "PATCH"]);
@@ -120,6 +121,24 @@ function toEvent(job: LayaShadowJob, result: LayaInspectionResult): RaspEvent {
   };
 }
 
+/** Evento de padrão de credencial: só os nomes dos padrões, nunca o trecho casado. */
+function toPatternEvent(job: LayaShadowJob, patterns: SecretPatternName[]): RaspEvent {
+  return {
+    traceId: job.traceId,
+    spanId: job.spanId,
+    service: job.service,
+    threatType: "secret_leak",
+    action: "logged",
+    clientIp: job.clientIp,
+    userAgent: job.userAgent,
+    path: job.path,
+    method: job.method,
+    score: 100,
+    metadata: { source: "pattern", patterns },
+    timestamp: new Date().toISOString(),
+  };
+}
+
 async function inspectInBackground(job: LayaShadowJob, text: string): Promise<void> {
   const counters = job.counters;
   if (counters) counters.scheduled += 1;
@@ -161,6 +180,12 @@ export function scheduleLayaInspection(job: LayaShadowJob): void {
   setImmediate(() => {
     const text = extractInspectableText(job.body);
     if (!text) return;
+    // Antes do gate: a regex é síncrona e barata, então sobrevive a rajadas (ADR 010).
+    const patterns = detectSecretPatterns(text);
+    if (patterns.length > 0) {
+      job.enqueue(toPatternEvent(job, patterns));
+      void job.flush().catch(() => {});
+    }
     void inspectInBackground(job, text);
   });
 }

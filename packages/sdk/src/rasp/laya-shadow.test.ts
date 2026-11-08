@@ -237,3 +237,49 @@ describe("laya shadow counters", () => {
     expect(counters).toEqual(createLayaShadowCounters());
   });
 });
+
+describe("credential patterns in the shadow", () => {
+  const connection = { message: "o banco está em postgres://admin:SenhaForte_2026@db.interno:5432/vendas" };
+
+  it("logs a pattern event even when the gate is full", async () => {
+    const { events, calls, flushCount } = job({ body: connection, gate: createLayaGate(0) });
+
+    await settle();
+
+    expect(calls).toEqual([]);
+    expect(events).toHaveLength(1);
+    expect(events[0]).toMatchObject({
+      traceId: TRACE_ID,
+      threatType: "secret_leak",
+      action: "logged",
+      score: 100,
+      metadata: { source: "pattern", patterns: ["url_credentials"] },
+    });
+    expect(flushCount()).toBe(1);
+  });
+
+  it("never copies the matched secret into the event", async () => {
+    const { events } = job({ body: connection, gate: createLayaGate(0) });
+
+    await settle();
+
+    expect(JSON.stringify(events)).not.toContain("SenhaForte");
+  });
+
+  it("still asks laya after a pattern hit", async () => {
+    const { events, calls } = job({ body: connection });
+
+    await settle();
+
+    expect(calls).toHaveLength(1);
+    expect(events.map((e) => (e.metadata as { source: string }).source)).toEqual(["pattern", "laya"]);
+  });
+
+  it("logs nothing from patterns when the text has no credential", async () => {
+    const { events } = job({ gate: createLayaGate(0) });
+
+    await settle();
+
+    expect(events).toEqual([]);
+  });
+});
