@@ -863,6 +863,6 @@ A partir daqui, toda configuração do Laya é pré-registrada antes de rodar e 
 - C01 não passou porque os falsos positivos em difíceis quase dobraram.
 - C02 mostrou que o checkpoint `english` explicava a perda de credenciais, e que o `multilingual` dá o melhor F1 e a menor latência, mas com 19/54 FP.
 - C09 mostrou que, no `multilingual`, os falsos positivos de credencial caem com limiar 0,99, mas os de injeção só caem perto de 0,995, porque as notas dos textos difíceis ficam saturadas perto de 1.
-- **C10** (opção A): `multilingual` forçado com um limiar por pergunta. Os limiares saem de uma regra fixada antes (grade, FP em difíceis ≤ 0,15 no pool dev + validação, maior F1). A configuração é testada uma única vez num terceiro conjunto, com pelo menos 100 legítimos difíceis, contra C00 no mesmo conjunto.
+- **C10** (opção A): `multilingual` forçado com um limiar por pergunta. Os limiares saem de uma regra fixada antes (grade, FP em difíceis ≤ 0,17 no pool dev + validação, maior F1; o teto foi revisto de 0,15 para 0,17 antes do pré-registro, porque 0,15 derrubava o recall de injeção para 0,381, abaixo da linha de base). A configuração é testada uma única vez num terceiro conjunto, com pelo menos 100 legítimos difíceis, contra C00 no mesmo conjunto.
 
 C08 fica como alternativa se o recall de injeção de C10 for baixo demais: custa duas chamadas ao sidecar por texto.

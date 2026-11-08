@@ -1,6 +1,6 @@
 /**
  * Regra de seleção dos limiares da C10 (pré-registrada no spec de 08/11/2026):
- * grade por pergunta; restrição de taxa de FP em legítimos difíceis ≤ 0,15 no
+ * grade por pergunta; restrição de taxa de FP em legítimos difíceis ≤ 0,17 no
  * pool de ajuste (dev + validation); maior F1; desempate por maior recall de
  * injeção, depois maior recall de credencial, depois menor soma de limiares.
  *
@@ -17,7 +17,12 @@ import { parseCaseScores, verdictFromScore, type CaseScore } from "./laya-rescor
 import { configCommit } from "./laya-run-config.ts";
 
 export const SELECTION_GRID = [0.85, 0.9, 0.93, 0.95, 0.97, 0.98, 0.99, 0.995, 0.999] as const;
-export const MAX_HARD_FP_RATE = 0.15;
+/**
+ * Teto revisto de 0,15 para 0,17 em 08/11/2026, antes do pré-registro da C10 e
+ * sem ver o conjunto de teste: com 0,15 o pool escolhia recall de injeção 0,381,
+ * abaixo da linha de base (ficha C10, seção 5).
+ */
+export const MAX_HARD_FP_RATE = 0.17;
 
 export interface Selection {
   thresholds: LayaThresholds;
