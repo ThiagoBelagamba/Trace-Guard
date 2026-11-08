@@ -22,8 +22,8 @@ function run(pi: number, sl: number, abstained = false): LayaInspectionResult {
     modelUsed: "multilingual",
     latencyMs: 10,
     signals: {
-      prompt_injection: { noul: pi, ...(abstention ? { abstention } : {}) },
-      secret_leak: { noul: sl, ...(abstention ? { abstention } : {}) },
+      prompt_injection: { noul: pi, question: "prompt_injection", ...(abstention ? { abstention } : {}) },
+      secret_leak: { noul: sl, question: "sensitive_data", ...(abstention ? { abstention } : {}) },
     },
   };
 }

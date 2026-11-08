@@ -59,8 +59,9 @@ describe("raspMiddleware semantic shadow", () => {
             JSON.stringify({
               routing: { model: "multilingual" },
               answers: {
+                jailbreak: { noul: 0.3, answer_confidence: 0.7 },
                 prompt_injection: { noul: 0.91, answer_confidence: 0.91 },
-                secret_leak: { noul: 0.1, answer_confidence: 0.9 },
+                sensitive_data: { noul: 0.1, answer_confidence: 0.9 },
               },
             })
           );

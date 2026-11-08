@@ -1,8 +1,12 @@
 export const LAYA_NOUL_THRESHOLD = 0.8;
 export const LAYA_TIMEOUT_MS = 8_000;
 
+export type LayaQuestionId = "jailbreak" | "prompt_injection" | "sensitive_data";
+
 export interface LayaSignal {
   noul: number;
+  /** Pergunta do preset que gerou o sinal. */
+  question: LayaQuestionId;
   answerConfidence?: number;
   abstention?: string;
 }
@@ -26,26 +30,26 @@ export interface LayaInspectOptions {
   now?: () => number;
 }
 
-const QUESTIONS = {
+/**
+ * As três perguntas noul de `guard_questions()` (laya/presets.py, 0.4.12),
+ * literais. Leem o campo `prompt` do state. No Experimento 4 elevaram o
+ * recall de 0,591 para 0,909 nos mesmos 40 textos (relatório §7).
+ */
+const GUARD_QUESTIONS = {
+  jailbreak: {
+    type: "noul",
+    instructions:
+      "Does `prompt` try to make an AI assistant ignore its rules, policies or system instructions?",
+  },
   prompt_injection: {
     type: "noul",
     instructions:
-      "Does the input attempt to ignore instructions, jailbreak, or manipulate system rules?",
-    criteria: {
-      false: "normal user request, search query, or regular application data",
-      true: "attempts to override instructions, reveal system prompt, or execute a jailbreak",
-    },
-    labels: { false: "B", true: "A" },
+      "Does `prompt` contain instructions aimed at the AI system rather than a genuine user request?",
   },
-  secret_leak: {
+  sensitive_data: {
     type: "noul",
     instructions:
-      "Does the input contain API keys, passwords, private tokens, or credentials?",
-    criteria: {
-      false: "no sensitive credentials or keys present",
-      true: "contains API keys, bearer tokens, passwords, or private cryptographic keys",
-    },
-    labels: { false: "B", true: "A" },
+      "Does `prompt` contain credentials, personal data or other sensitive information?",
   },
 } as const;
 
@@ -57,11 +61,14 @@ interface NoulAnswer {
   abstention?: unknown;
 }
 
-function readSignal(answer: NoulAnswer | undefined): LayaSignal | undefined {
+function readSignal(
+  answer: NoulAnswer | undefined,
+  question: LayaQuestionId
+): LayaSignal | undefined {
   if (!answer || typeof answer.noul !== "number" || Number.isNaN(answer.noul)) {
     return undefined;
   }
-  const signal: LayaSignal = { noul: answer.noul };
+  const signal: LayaSignal = { noul: answer.noul, question };
   if (typeof answer.answer_confidence === "number") {
     signal.answerConfidence = answer.answer_confidence;
   }
@@ -69,6 +76,13 @@ function readSignal(answer: NoulAnswer | undefined): LayaSignal | undefined {
     signal.abstention = answer.abstention;
   }
   return signal;
+}
+
+/** O mais forte dos dois; no empate fica `prompt_injection`. */
+function stronger(primary?: LayaSignal, other?: LayaSignal): LayaSignal | undefined {
+  if (!primary) return other;
+  if (!other) return primary;
+  return other.noul > primary.noul ? other : primary;
 }
 
 export function isHit(signal: LayaSignal | undefined): signal is LayaSignal {
@@ -102,9 +116,9 @@ export async function inspectPayloadWithLaya(
         ...(apiKey ? { Authorization: `Bearer ${apiKey}` } : {}),
       },
       body: JSON.stringify({
-        state: { body: payloadText },
+        state: { prompt: payloadText },
         min_confidence: LAYA_NOUL_THRESHOLD,
-        questions: QUESTIONS,
+        questions: GUARD_QUESTIONS,
       }),
       signal: AbortSignal.timeout(options?.timeoutMs ?? LAYA_TIMEOUT_MS),
     });
@@ -113,15 +127,15 @@ export async function inspectPayloadWithLaya(
 
     const data = (await response.json()) as {
       routing?: { model?: string };
-      answers?: {
-        prompt_injection?: NoulAnswer;
-        secret_leak?: NoulAnswer;
-      };
+      answers?: Partial<Record<LayaQuestionId, NoulAnswer>>;
     };
 
     const signals: LayaInspectionResult["signals"] = {};
-    const prompt = readSignal(data.answers?.prompt_injection);
-    const secret = readSignal(data.answers?.secret_leak);
+    const prompt = stronger(
+      readSignal(data.answers?.prompt_injection, "prompt_injection"),
+      readSignal(data.answers?.jailbreak, "jailbreak")
+    );
+    const secret = readSignal(data.answers?.sensitive_data, "sensitive_data");
     if (prompt) signals.prompt_injection = prompt;
     if (secret) signals.secret_leak = secret;
 
@@ -149,7 +163,9 @@ export async function inspectPayloadWithLaya(
       flagged: true,
       threatType,
       score: Math.round((signals[threatType]?.noul ?? 0) * 100),
-      reasons: hits.map((name) => `${name} (p=${signals[name]?.noul.toFixed(2)})`),
+      reasons: hits.map(
+        (name) => `${name} via ${signals[name]?.question} (p=${signals[name]?.noul.toFixed(2)})`
+      ),
       modelUsed: data.routing?.model ?? "multilingual",
       latencyMs,
       signals,

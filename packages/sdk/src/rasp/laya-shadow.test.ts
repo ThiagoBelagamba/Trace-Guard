@@ -20,7 +20,7 @@ function flagged(threatType: LayaInspectionResult["threatType"] = "prompt_inject
     modelUsed: "multilingual",
     latencyMs: 40,
     signals: {
-      prompt_injection: { noul: 0.91, answerConfidence: 0.91 },
+      prompt_injection: { noul: 0.91, answerConfidence: 0.91, question: "prompt_injection" },
     },
   };
 }
