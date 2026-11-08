@@ -1,6 +1,7 @@
 import type { RaspEvent } from "@traceguard/shared";
 import {
   inspectPayloadWithLaya,
+  type LayaThresholds,
   type LayaInspectionResult,
 } from "./laya-inspector.js";
 import { detectSecretPatterns, type SecretPatternName } from "./secret-patterns.js";
@@ -63,6 +64,8 @@ export interface LayaShadowJob {
   apiKey?: string;
   /** Checkpoint forçado (R7); sem ele o sidecar escolhe pelo idioma. */
   model?: string;
+  /** Limiar por pergunta; sem ele, o padrão do inspetor (0,85 nas duas). */
+  thresholds?: LayaThresholds;
   gate: LayaGate;
   counters?: LayaShadowCounters;
   inspect?: typeof inspectPayloadWithLaya;
@@ -158,6 +161,7 @@ async function inspectInBackground(job: LayaShadowJob, text: string): Promise<vo
     const inspect = job.inspect ?? inspectPayloadWithLaya;
     const result = await inspect(text, job.layaUrl, job.apiKey, {
       ...(job.model ? { model: job.model } : {}),
+      ...(job.thresholds ? { thresholds: job.thresholds } : {}),
       onFailure: (kind) => {
         if (counters && kind === "timeout") counters.timedOut += 1;
       },

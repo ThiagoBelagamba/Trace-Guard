@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { inspectPayloadWithLaya, pickThreatType } from "./laya-inspector.js";
+import { DEFAULT_LAYA_THRESHOLDS, inspectPayloadWithLaya, pickThreatType } from "./laya-inspector.js";
 
 function jsonResponse(body: unknown, status = 200): Response {
   return new Response(JSON.stringify(body), {
@@ -181,6 +181,44 @@ describe("inspectPayloadWithLaya", () => {
       "secret_leak via sensitive_data (p=0.90)",
       "prompt_injection via prompt_injection (p=1.00)",
     ]);
+  });
+
+  it("applies a separate threshold per question", async () => {
+    const result = await inspectPayloadWithLaya("x", "http://laya", undefined, {
+      fetchImpl: answering({ prompt_injection: { noul: 0.97 }, sensitive_data: { noul: 0.97 } }),
+      thresholds: { prompt_injection: 0.995, secret_leak: 0.95 },
+    });
+
+    expect(result?.flagged).toBe(true);
+    expect(result?.threatType).toBe("secret_leak");
+    expect(result?.reasons).toEqual(["secret_leak via sensitive_data (p=0.97)"]);
+  });
+
+  it("sends minConfidence as min_confidence", async () => {
+    const bodies: Record<string, unknown>[] = [];
+    const fetchImpl = async (_url: unknown, init?: RequestInit) => {
+      bodies.push(JSON.parse(String(init?.body)));
+      return jsonResponse({ answers: {} });
+    };
+
+    await inspectPayloadWithLaya("x", "http://laya", undefined, { fetchImpl, minConfidence: 0.9 });
+    await inspectPayloadWithLaya("x", "http://laya", undefined, { fetchImpl });
+
+    expect(bodies[0]?.min_confidence).toBe(0.9);
+    expect(bodies[1]?.min_confidence).toBe(0.8);
+  });
+
+  it("keeps 0.85 on both questions when no thresholds are given", async () => {
+    const above = await inspectPayloadWithLaya("x", "http://laya", undefined, {
+      fetchImpl: answering({ prompt_injection: { noul: 0.1 }, sensitive_data: { noul: 0.86 } }),
+    });
+    const below = await inspectPayloadWithLaya("x", "http://laya", undefined, {
+      fetchImpl: answering({ prompt_injection: { noul: 0.1 }, sensitive_data: { noul: 0.84 } }),
+    });
+
+    expect(DEFAULT_LAYA_THRESHOLDS).toEqual({ prompt_injection: 0.85, secret_leak: 0.85 });
+    expect(above?.flagged).toBe(true);
+    expect(below?.flagged).toBe(false);
   });
 
   it("picks the threat type with secret_leak first", () => {

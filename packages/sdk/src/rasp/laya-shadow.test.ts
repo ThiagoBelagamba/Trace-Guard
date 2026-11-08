@@ -295,4 +295,18 @@ describe("credential patterns on long bodies", () => {
     expect(events).toHaveLength(1);
     expect(events[0]?.metadata).toEqual({ source: "pattern", patterns: ["url_credentials"] });
   });
+  it("passes job thresholds to the inspector", async () => {
+    const seen: unknown[] = [];
+    job({
+      thresholds: { prompt_injection: 0.995, secret_leak: 0.99 },
+      inspect: async (_text, _url, _key, options) => {
+        seen.push(options?.thresholds);
+        return null;
+      },
+    });
+    await settle();
+    await settle();
+
+    expect(seen).toEqual([{ prompt_injection: 0.995, secret_leak: 0.99 }]);
+  });
 });

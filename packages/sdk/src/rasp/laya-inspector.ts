@@ -7,6 +7,17 @@ export const LAYA_NOUL_THRESHOLD = 0.85;
 export const LAYA_MIN_CONFIDENCE = 0.8;
 export const LAYA_TIMEOUT_MS = 8_000;
 
+/** Limiar noul por pergunta; cada configuração do registro fixa os seus. */
+export interface LayaThresholds {
+  readonly prompt_injection: number;
+  readonly secret_leak: number;
+}
+
+export const DEFAULT_LAYA_THRESHOLDS: LayaThresholds = {
+  prompt_injection: LAYA_NOUL_THRESHOLD,
+  secret_leak: LAYA_NOUL_THRESHOLD,
+};
+
 export type LayaQuestionId = "jailbreak" | "prompt_injection" | "sensitive_data";
 
 export interface LayaSignal {
@@ -36,6 +47,10 @@ export interface LayaInspectOptions {
   now?: () => number;
   /** Força um checkpoint (`model` no corpo). Sem ele, o sidecar roteia por idioma. */
   model?: string;
+  /** Limiar por pergunta; sem ele, 0,85 nas duas. */
+  thresholds?: LayaThresholds;
+  /** Enviado como min_confidence; sem ele, LAYA_MIN_CONFIDENCE. */
+  minConfidence?: number;
   /** Chamado quando a inspeção falha no transporte (o resultado é null). */
   onFailure?: (kind: LayaFailureKind) => void;
 }
@@ -107,10 +122,13 @@ export function pickThreatType(piHit: boolean, slHit: boolean): SemanticThreat |
   return undefined;
 }
 
-export function isHit(signal: LayaSignal | undefined): signal is LayaSignal {
+export function isHit(
+  signal: LayaSignal | undefined,
+  threshold: number = LAYA_NOUL_THRESHOLD
+): signal is LayaSignal {
   return (
     signal !== undefined &&
-    signal.noul >= LAYA_NOUL_THRESHOLD &&
+    signal.noul >= threshold &&
     signal.abstention !== "abstained"
   );
 }
@@ -139,7 +157,7 @@ export async function inspectPayloadWithLaya(
       },
       body: JSON.stringify({
         state: { prompt: payloadText },
-        min_confidence: LAYA_MIN_CONFIDENCE,
+        min_confidence: options?.minConfidence ?? LAYA_MIN_CONFIDENCE,
         questions: GUARD_QUESTIONS,
         ...(options?.model ? { model: options.model } : {}),
       }),
@@ -165,8 +183,9 @@ export async function inspectPayloadWithLaya(
     if (prompt) signals.prompt_injection = prompt;
     if (secret) signals.secret_leak = secret;
 
-    const piHit = isHit(prompt);
-    const slHit = isHit(secret);
+    const t = options?.thresholds ?? DEFAULT_LAYA_THRESHOLDS;
+    const piHit = isHit(prompt, t.prompt_injection);
+    const slHit = isHit(secret, t.secret_leak);
     const threatType = pickThreatType(piHit, slHit);
     const hits: SemanticThreat[] = [];
     if (threatType) hits.push(threatType);
