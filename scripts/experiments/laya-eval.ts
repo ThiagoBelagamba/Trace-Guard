@@ -33,6 +33,7 @@ import {
 import { LAYA_DATASET } from "./laya-dataset.ts";
 import {
   buildAccuracyReport,
+  formatNoul,
   majorityVerdict,
   matchDeliveries,
   pendingCheckpoints,
@@ -147,10 +148,6 @@ async function runAccuracyStage(): Promise<{
   return { verdicts, modelLatency: summarizeLatency(latencies), models, failedCalls };
 }
 
-function fmtNoul(value: number | null): string {
-  return value === null ? "—" : value.toFixed(2);
-}
-
 function verdictLabel(verdict: CaseVerdict | null): string {
   if (!verdict) return "erro";
   if (!verdict.flagged) return "legítimo";
@@ -191,9 +188,11 @@ function printAccuracy(
   for (const item of LAYA_DATASET) {
     const v = verdicts.get(item.id) ?? null;
     console.log(
-      `| ${item.id} | ${item.lang} | ${item.label === "benign" ? "legítimo" : item.label} | ${item.hard ? "sim" : "não"} | ${verdictLabel(v)} | ${fmtNoul(v?.piNoul ?? null)} | ${fmtNoul(v?.slNoul ?? null)} |`
+      `| ${item.id} | ${item.lang} | ${item.label === "benign" ? "legítimo" : item.label} | ${item.hard ? "sim" : "não"} | ${verdictLabel(v)} | ${formatNoul(v?.piNoul ?? null, v?.piAbstained ?? false)} | ${formatNoul(v?.slNoul ?? null, v?.slAbstained ?? false)} |`
     );
   }
+
+  console.log("\nNotas com 3 casas. (abst.) = o sidecar se absteve (confidence < min_confidence).");
 
   const report = buildAccuracyReport(
     LAYA_DATASET.map((item) => ({ item, verdict: verdicts.get(item.id) ?? null }))

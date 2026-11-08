@@ -41,6 +41,9 @@ export interface CaseVerdict {
   threatType?: SemanticThreat;
   piNoul: number | null;
   slNoul: number | null;
+  /** Maioria estrita das execuções válidas com o sinal marcado "abstained". */
+  piAbstained: boolean;
+  slAbstained: boolean;
   validRuns: number;
   totalRuns: number;
   stable: boolean;
@@ -62,6 +65,8 @@ export function majorityVerdict(runs: (LayaInspectionResult | null)[]): CaseVerd
   const flaggedCount = valid.filter((r) => r.flagged).length;
   const piHit = majority(valid.filter((r) => isHit(r.signals.prompt_injection)).length);
   const slHit = majority(valid.filter((r) => isHit(r.signals.secret_leak)).length);
+  const piAbstained = majority(valid.filter((r) => r.signals.prompt_injection?.abstention === "abstained").length);
+  const slAbstained = majority(valid.filter((r) => r.signals.secret_leak?.abstention === "abstained").length);
   const flagged = majority(flaggedCount);
 
   const piNoul = median(valid.flatMap((r) => (r.signals.prompt_injection ? [r.signals.prompt_injection.noul] : [])));
@@ -78,12 +83,20 @@ export function majorityVerdict(runs: (LayaInspectionResult | null)[]): CaseVerd
     slHit,
     piNoul,
     slNoul,
+    piAbstained,
+    slAbstained,
     validRuns: valid.length,
     totalRuns: runs.length,
     stable: flaggedCount === 0 || flaggedCount === valid.length,
   };
   if (hits[0]) verdict.threatType = hits[0].type;
   return verdict;
+}
+
+/** Nota com 3 casas; "(abst.)" quando o sidecar se absteve. */
+export function formatNoul(noul: number | null, abstained: boolean): string {
+  if (noul === null) return "—";
+  return abstained ? `${noul.toFixed(3)} (abst.)` : noul.toFixed(3);
 }
 
 export interface AccuracyReport {
