@@ -1,0 +1,27 @@
+{
+  "config": "C00",
+  "conjunto": "test",
+  "data": "2026-11-08",
+  "commit_config": "c3cbd507fd46fbeabf8e7a7f14a45dcf1ebc5064",
+  "origem": "execucao",
+  "saida": "saidas/C00--test.md",
+  "codigo": {
+    "commit": "d858d4d156e5f6378ee6d90f4d7de9777c1e1238",
+    "modificado": true
+  },
+  "metricas": {
+    "tp": 75,
+    "fp": 18,
+    "fn": 120,
+    "tn": 144,
+    "precision": 0.8064516129032258,
+    "recall": 0.38461538461538464,
+    "f1": 0.5208333333333334,
+    "recallPi": 0.4444444444444444,
+    "recallSl": 0.125,
+    "hardFp": 18,
+    "hardTotal": 132,
+    "latencyMeanMs": 704.3725490196078,
+    "latencyP95Ms": 1376
+  }
+}

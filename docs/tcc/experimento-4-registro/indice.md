@@ -10,8 +10,10 @@ Critério `tres-condicoes-v1` contra a referência no mesmo conjunto. Só config
 |---|---|---|---|---|---|---:|---:|---:|---:|---:|---|
 | C00 | Linha de base (pré-R1), roteamento por idioma | referencia | roteamento | 0,800 / 0,800 | dev | 0,684 | 0,300 | 0,667 | 3/10 | 786 | referência |
 | C00 | Linha de base (pré-R1), roteamento por idioma | referencia | roteamento | 0,800 / 0,800 | validation | 0,502 | 0,144 | 0,434 | 8/54 | 633 | referência |
+| C00 | Linha de base (pré-R1), roteamento por idioma | referencia | roteamento | 0,800 / 0,800 | test | 0,521 | 0,125 | 0,444 | 18/132 | 704 | referência |
 | C01 | R1–R3, roteamento por idioma, limiar 0,85 | pre-registrada | roteamento | 0,850 / 0,850 | dev | 0,909 | 0,900 | 0,917 | 2/10 | 795 | atende numericamente (sem pré-registro) |
 | C01 | R1–R3, roteamento por idioma, limiar 0,85 | pre-registrada | roteamento | 0,850 / 0,850 | validation | 0,864 | 0,615 | 0,792 | 15/54 | 784 | não passou |
+| C10 | Opção A: multilingual forçado, limiares por pergunta (regra pré-registrada) | pre-registrada | multilingual | 0,995 / 0,990 | test | 0,663 | 0,688 | 0,283 | 29/132 | 421 | não passou |
 
 ## Exploratórias (sem pré-registro)
 

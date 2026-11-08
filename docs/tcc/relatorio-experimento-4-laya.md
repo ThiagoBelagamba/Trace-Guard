@@ -868,3 +868,25 @@ A partir daqui, toda configuração do Laya é pré-registrada antes de rodar e 
 C08 fica como alternativa se o recall de injeção de C10 for baixo demais: custa duas chamadas ao sidecar por texto.
 
 **Ressalva de precisão.** As re-pontuações usam as notas por caso das saídas salvas, que tinham 3 casas decimais. Longe dos limiares isso não muda nada: o teste de registro reproduz exatamente as tabelas acima. Mas 8 casos do pool da C10 caem exatamente sobre 0,995 ou 0,990. Por isso os números da C10 no pool formam uma faixa: FP em difíceis entre 7/64 e 10/64, recall de injeção entre 0,517 e 0,542 (ficha C10, seção 10). O mesmo vale para C09 na validação. O veredito da C10 vem do conjunto de teste, com notas brutas, e não é afetado. Desde 08/11/2026, a saída do script imprime 6 casas.
+
+---
+
+## 20. Resultado da C10 no conjunto de teste
+
+> Executada uma única vez em 08/11/2026. Pré-registro: commit `55faa9d`. Conjunto de teste: commit `d858d4d`, com 357 textos, dos quais 132 legítimos difíceis.
+
+| Condição | C00 (referência) | C10 | Exigido | Veredito |
+|---|---:|---:|---:|---|
+| 1. F1 binário | 0,521 | 0,663 | ≥ 0,621 | atende |
+| 2. Recall de `secret_leak` | 0,125 | 0,688 | ≥ 0,325 | atende |
+| 3. Taxa de FP em legítimos difíceis | 0,136 (18/132) | 0,220 (29/132) | ≤ 0,186 | não atende |
+
+**Veredito: a configuração C10 não passou.** A falha está, de novo, na condição 3, como na C01. Os intervalos de Wilson a 95% da taxa de FP em difíceis quase não se sobrepõem: 0,088–0,205 na C00 e 0,158–0,298 na C10. Com 132 difíceis, a diferença não é ruído de amostra pequena.
+
+**O que o resultado mostra** (análise feita depois da execução; detalhes na ficha C10, seção 10):
+
+- **O ganho em credencial se confirmou num conjunto novo.** O recall de `secret_leak` foi de 0,125 para 0,688, e a latência média caiu de 704 para 421 ms.
+- **O recall de injeção caiu para 0,283**, abaixo da linha de base (0,444). O limiar de 0,995 que conteve os falsos positivos na validação cortou injeções reais no teste.
+- **Nenhum limiar do `multilingual` passaria na condição 3 neste conjunto.** Mesmo com 0,999 nas duas perguntas, ainda seriam 26 de 132 difíceis marcados. As notas desses textos (chaves públicas, hashes, base64, logs, citações) ficam saturadas perto de 1.
+
+**Conclusão para a monografia:** quatro rodadas de ajuste e três conjuntos (C01 na validação, C10 no teste, e as exploratórias C02–C09) chegam à mesma conclusão. Ajustar limiar, checkpoint e calibração troca recall por falsos positivos, mas não remove o piso de falsos positivos em textos legítimos que falam de ataque ou de credencial. Esse piso vem de o modelo julgar o assunto do texto, não a ação (§6.5). O Laya em modo sombra melhora muito a detecção de credenciais e a latência. Para chegar ao critério pré-registrado seria preciso mudar o que se pergunta ao modelo, ou combinar o modelo com regras de contexto. Ajustar parâmetros não basta.

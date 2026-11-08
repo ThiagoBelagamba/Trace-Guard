@@ -84,11 +84,38 @@ Esta ficha e `configuracoes/C10.json` foram commitados juntos com a mensagem `pr
 
 ## 8. Resultado
 
-Pendente — aguardando `laya-test.json`.
+Executada uma única vez em 08/11/2026 no conjunto de teste (`scripts/experiments/data/laya-test.json`, commit `d858d4d`):
+- 357 textos: 99 de injeção, 96 de credencial e 162 legítimos, dos quais 132 difíceis;
+- 179 textos em português;
+- nenhuma chamada com falha.
+
+O cabeçalho da saída confirma o commit de pré-registro `55faa9d`. A referência C00 rodou no mesmo conjunto antes.
+
+Os dois resultados registram `codigo.modificado: true`. A única mudança local era um título `## NOVO CONJUNTO` em `scripts/experiments/data/README.md`, que não é código executado.
+
+| Métrica | C00 (referência) | C10 |
+|---|---:|---:|
+| TP / FP / FN / TN | 75 / 18 / 120 / 144 | 111 / 29 / 84 / 133 |
+| Precisão | 0,806 | 0,793 |
+| Recall | 0,385 | 0,569 |
+| F1 | 0,521 | **0,663** |
+| Recall `prompt_injection` | 0,444 | 0,283 |
+| Recall `secret_leak` | 0,125 | **0,688** |
+| FP em legítimos difíceis | 18/132 (0,136) | 29/132 (0,220) |
+| Intervalo de Wilson 95% da taxa de FP em difíceis | 0,088 – 0,205 | 0,158 – 0,298 |
+| Latência média / p95 (ms) | 704 / 1376 | 421 / 716 |
+
+Saídas: [`saidas/C00--test.md`](../saidas/C00--test.md) e [`saidas/C10--test.md`](../saidas/C10--test.md).
 
 ## 9. Veredito
 
-Pendente — aguardando `laya-test.json`.
+**`test`: Configuração C10 não passou.**
+
+| Condição | Valor | Exigido | Atende |
+|---|---:|---:|---|
+| F1 binário | 0,663 | ≥ 0,621 | sim |
+| Recall de secret_leak | 0,688 | ≥ 0,325 | sim |
+| Taxa de FP em legítimos difíceis | 0,220 (29/132) | ≤ 0,186 (24/132) | não |
 
 ## 10. Observações
 
@@ -101,4 +128,9 @@ Pendente — aguardando `laya-test.json`.
 
 Os números do pool são, portanto, uma faixa, e não um valor exato. Não se sabe, a partir das saídas salvas, se o par 0,995 / 0,99 continuaria em primeiro na grade com as notas brutas. **O veredito não é afetado:** a execução no teste usa as notas brutas do sidecar. Desde esta data, a saída do script imprime 6 casas.
 
-Mais conclusões ficam pendentes até a execução no teste.
+**Análise da execução no teste (08/11/2026).** Tudo o que segue foi calculado depois de ver o resultado. Explica o veredito, mas não o muda.
+
+- **O mesmo padrão de C01:** F1 e credencial passam com folga, e a condição 3 falha. Os 29 falsos positivos são todos em legítimos difíceis: 14 marcados como injeção e 15 como credencial. As categorias são chaves e certificados públicos (6), hashes e checksums (5), base64, JSON e Markdown inofensivos (4), logs e status de sistema (4), texto ofuscado inofensivo (3), citações de notícia ou artigo (2), além de boleto, PIX, `.env.example`, código sem segredo e roleplay. O conjunto de teste tem mais textos desse tipo do que a validação.
+- **Nenhum limiar resolveria.** Mesmo com 0,999 nas duas perguntas, o `multilingual` marcaria 26 dos 132 difíceis, acima dos 24 permitidos. As notas desses textos ficam saturadas perto de 1. É o mesmo problema da §6.5 do relatório: o modelo julga o assunto do texto, não a ação.
+- **O recall de injeção caiu para 0,283**, abaixo da linha de base (0,444) e muito abaixo dos 0,517–0,542 do pool. Dezoito injeções perdidas tinham nota entre 0,85 e 0,995: o limiar 0,995, necessário para conter os falsos positivos na validação, cortou essas injeções no teste.
+- **O que se sustenta:** o `multilingual` forçado detecta credenciais muito melhor que a linha de base (0,688 contra 0,125), com 40% menos latência. Mas não separa um texto legítimo difícil de um ataque.
