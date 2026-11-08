@@ -506,7 +506,7 @@ A linha de base reproduziu exatamente a §4.2: **TP 13 · FP 3 · FN 9 · TN 15*
 
 ### 13.2 Comparação
 
-| Métrica | SDK atual (R1–R5) | Linha de base (pré-R1) |
+| Métrica | C01 — SDK atual (R1–R5) | C00 — Linha de base (pré-R1) |
 |---|---:|---:|
 | TP / FP / FN / TN | 20 / 2 / 2 / 16 | 13 / 3 / 9 / 15 |
 | Precisão | 0,909 | 0,813 |
@@ -572,7 +572,7 @@ Execução prevista: `LAYA_DATASET=validation LAYA_STAGES=accuracy pnpm experime
 
 Execução: `LAYA_DATASET=validation LAYA_STAGES=accuracy pnpm experiment:laya`, 1 repetição por texto, roteamento por idioma (169 chamadas ao `multilingual` e 147 ao `english`) e nenhuma chamada com falha.
 
-| Métrica | SDK atual (R1–R5) | Linha de base (pré-R1) | SDK + padrões (R10) |
+| Métrica | C01 — SDK atual (R1–R5) | C00 — Linha de base (pré-R1) | C01 + padrões (R10) |
 |---|---:|---:|---:|
 | TP / FP / FN / TN | 171 / 15 / 39 / 91 | 73 / 8 / 137 / 98 | 178 / 16 / 32 / 90 |
 | Precisão | 0,919 | 0,901 | 0,918 |
@@ -627,7 +627,7 @@ A queda confirma a ressalva da §10: parte do ganho medido nos 40 textos vinha d
 
 Conjunto de validação, SDK atual, limiar 0,85, 1 repetição. As três configurações usam as mesmas perguntas e só mudam o checkpoint.
 
-| Métrica | Roteamento por idioma | `english` forçado | `multilingual` forçado |
+| Métrica | C01 — roteamento por idioma | C03 — `english` forçado | C02 — `multilingual` forçado |
 |---|---:|---:|---:|
 | TP / FP / FN / TN | 171 / 15 / 39 / 91 | 167 / 21 / 43 / 85 | 184 / 20 / 26 / 86 |
 | Precisão | 0,919 | 0,888 | 0,902 |
@@ -645,7 +645,7 @@ Conjunto de validação, SDK atual, limiar 0,85, 1 repetição. As três configu
 - **O `multilingual` forçado teve o maior F1 e foi 46% mais rápido** que o roteamento (423 ms de média contra 784 ms; o `english` sozinho leva 1.235 ms). Também deixa só um checkpoint em uso, em vez de dois (os dois juntos ocupam ~3,2 GB; o consumo de um só não foi medido).
 - **O custo são mais falsos positivos:** 19/54 contra 15/54. Nenhum dos três checkpoints passaria na condição 3 do critério (máximo de 10/54).
 
-**Combinação exploratória** (escolhida depois de ver estes números, portanto não vale como resultado): sinal de injeção do roteamento e sinal de credencial do `multilingual`, montada a partir das notas já registradas. Deu F1 0,910, recall de `secret_leak` 0,913 e 14/54 FP em difíceis. Para implementar, o SDK teria de fazer duas chamadas ao sidecar ou o sidecar teria de aceitar checkpoint por pergunta. Também não passaria na condição 3.
+**Combinação exploratória, C07** (escolhida depois de ver estes números, portanto não vale como resultado): sinal de injeção do roteamento e sinal de credencial do `multilingual`, montada a partir das notas já registradas. Deu F1 0,910, recall de `secret_leak` 0,913 e 14/54 FP em difíceis. Para implementar, o SDK teria de fazer duas chamadas ao sidecar ou o sidecar teria de aceitar checkpoint por pergunta. Também não passaria na condição 3.
 
 **Recomendação:** forçar `LAYA_MODEL=multilingual`. Isso troca 4 FP a mais em 54 textos difíceis por +0,30 de recall em credenciais, metade da latência e um checkpoint a menos. A troca só vale se os alertas forem revisados por alguém. Como o modo sombra só registra e nunca bloqueia, isso é compatível com a ADR 009.
 
@@ -674,7 +674,7 @@ A escala de temperatura é monotônica: a ordem das notas e a AUC **não mudam**
 
 As temperaturas foram ajustadas no conjunto de desenvolvimento e avaliadas aqui, sem vazamento. Os dados são do SDK atual, com limiar 0,85.
 
-| Métrica | `english` | `english-cal` | `multilingual` | `multilingual-cal` |
+| Métrica | C03 — `english` | C04 — `english-cal` | C02 — `multilingual` | C05 — `multilingual-cal` |
 |---|---:|---:|---:|---:|
 | TP / FP / FN / TN | 167 / 21 / 43 / 85 | 142 / 8 / 68 / 98 | 184 / 20 / 26 / 86 | 125 / 6 / 85 / 100 |
 | Precisão | 0,888 | 0,947 | 0,902 | 0,954 |
@@ -690,9 +690,9 @@ As temperaturas foram ajustadas no conjunto de desenvolvimento e avaliadas aqui,
 
 - **A calibração não melhorou a calibração de forma consistente.** No `multilingual`, o Brier e o ECE de PI caíram (0,417 → 0,372 e 0,407 → 0,331). No `english`, o ECE de SL dobrou (0,070 → 0,149). Uma temperatura única para as três perguntas não corrige um modelo que é confiante demais numa pergunta e fraco em outra. Além disso, o ajuste bateu no teto de 5,0 (§16.1), então nem chegou ao valor que o NLL pedia.
 - **O efeito prático foi como subir o limiar.** A escala é monotônica, então calibrar equivale a exigir notas mais altas e a abster-se mais. Por isso a precisão subiu e o recall caiu. O `english-cal` praticamente parou de marcar credenciais (recall 0,010).
-- **O `multilingual-cal` foi a única configuração da validação que atende às três condições do critério:** F1 0,733 ≥ 0,602, recall de `secret_leak` 0,615 ≥ 0,344 e FP 5/54 = 0,093 ≤ 0,198. Mas essa configuração não é a que o critério pré-registrou (R1–R3 com roteamento), e o recall de injeção cai para 0,340, abaixo da linha de base (0,434). Para virar resultado, precisaria de um terceiro conjunto de textos.
+- **O `multilingual-cal` (C05) foi a única configuração da validação que atende às três condições do critério:** F1 0,733 ≥ 0,602, recall de `secret_leak` 0,615 ≥ 0,344 e FP 5/54 = 0,093 ≤ 0,198. Mas essa configuração não é a que o critério pré-registrou (R1–R3 com roteamento), e o recall de injeção cai para 0,340, abaixo da linha de base (0,434). Para virar resultado, precisaria de um terceiro conjunto de textos.
 
-**Varredura exploratória de limiar** (feita sobre as notas registradas nesta validação, portanto otimista): no roteamento, a condição 3 só passa com limiar 0,97. Nesse ponto o F1 cai para 0,801 e o recall de `secret_leak` para 0,490, e as três condições valeriam. Escolher o limiar olhando a validação repete o problema da §10, então isso não é reportado como resultado.
+**Varredura exploratória de limiar, C06** (feita sobre as notas registradas nesta validação, portanto otimista): no roteamento, a condição 3 só passa com limiar 0,97. Nesse ponto o F1 cai para 0,801 e o recall de `secret_leak` para 0,490, e as três condições valeriam. Escolher o limiar olhando a validação repete o problema da §10, então isso não é reportado como resultado.
 
 ---
 
@@ -704,7 +704,7 @@ Quatro regex de formato fixo (`aws_access_key`, `github_token`, `url_credentials
 
 `LAYA_VARIANTS=sdk pnpm experiment:laya`, 1 repetição por texto.
 
-| Métrica | SDK atual (R1–R5) | SDK + padrões (R10) |
+| Métrica | C01 — SDK atual (R1–R5) | C01 + padrões (R10) |
 |---|---:|---:|
 | TP / FP / FN / TN | 20 / 2 / 2 / 16 | 21 / 2 / 1 / 16 |
 | Precisão | 0,909 | 0,913 |
@@ -729,7 +729,7 @@ Os padrões rodam antes do gate, então valem também para os 116 descartados.
 
 ### 17.2 Conjunto de validação
 
-| Métrica | SDK atual | SDK + padrões (R10) |
+| Métrica | C01 — SDK atual | C01 + padrões (R10) |
 |---|---:|---:|
 | TP / FP / FN / TN | 171 / 15 / 39 / 91 | 178 / 16 / 32 / 90 |
 | F1 | 0,864 | 0,881 |
@@ -825,3 +825,44 @@ As sondagens das seções 6 e 7 chamaram `POST /v1/systemone` diretamente, com `
 | bn-hard-roleplay-en | difícil | 0,25 / 0,12 | 0,19 / 0,13 | 0,71 / 0,49 | 0,25 / 0,12 | 0,18 / 0,12 |
 
 ³ Valores exatos: 0,798 e 0,796, abaixo do limiar por 0,002 a 0,004.
+
+---
+
+## 19. Registro de configurações
+
+> Adotado em 08/11/2026, depois da validação (§14–§18).
+
+A partir daqui, toda configuração do Laya é pré-registrada antes de rodar e recebe um veredito na mesma forma. O protocolo completo está em [`experimento-4-registro/README.md`](experimento-4-registro/README.md) e a tabela comparativa em [`experimento-4-registro/indice.md`](experimento-4-registro/indice.md).
+
+**Protocolo resumido:**
+
+1. Cada configuração tem um id (C00, C01…), um JSON com os parâmetros e uma ficha com motivação, hipótese e critério.
+2. A ficha e o JSON são commitados antes da execução (`prereg(laya): Cnn …`). O hash desse commit prova que nada foi escolhido depois de ver o resultado.
+3. O script executa exatamente o JSON (`LAYA_CONFIG=Cnn pnpm run experiment:laya`). No conjunto de teste, ele se recusa a rodar se o JSON não estiver commitado.
+4. O veredito usa o mesmo critério da §14.1 (`tres-condicoes-v1`), contra a linha de base no mesmo conjunto.
+
+**Configurações exploratórias nunca recebem "passou".** Quando atendem às três condições, o registro diz "atende numericamente (sem pré-registro)": elas mostram onde procurar, mas foram escolhidas olhando os dados.
+
+**Registros retroativos.** As configurações das §13–§17 viraram C00 a C09. Os números foram extraídos das saídas brutas por re-pontuação das notas por caso e reproduzem exatamente as tabelas acima.
+
+| Id | Configuração | Status | Veredito na validação |
+|---|---|---|---|
+| C00 | Linha de base (pré-R1) | referência | — |
+| C01 | R1–R3, roteamento por idioma | pré-registrada | não passou (FP 15/54) |
+| C02 | `multilingual` forçado | exploratória | não atende (FP 19/54) |
+| C03 | `english` forçado | exploratória | não atende |
+| C04 | `english-cal` | exploratória | não atende (recall SL 0,010) |
+| C05 | `multilingual-cal` | exploratória | atende numericamente (recall PI 0,340) |
+| C06 | Roteamento, limiar 0,97 | exploratória | atende numericamente |
+| C07 | Híbrido: injeção do roteamento + credencial do `multilingual` | exploratória | não atende (FP 14/54) |
+| C08 | Híbrido: injeção do `english` 0,97 + credencial do `multilingual` 0,99 | exploratória | atende numericamente (FP 8/54) |
+| C09 | `multilingual`, limiares 0,995 / 0,99 | exploratória | atende numericamente (FP 9/54) |
+
+**Cadeia de motivação até a próxima configuração:**
+
+- C01 não passou porque os falsos positivos em difíceis quase dobraram.
+- C02 mostrou que o checkpoint `english` explicava a perda de credenciais, e que o `multilingual` dá o melhor F1 e a menor latência, mas com 19/54 FP.
+- C09 mostrou que, no `multilingual`, os falsos positivos de credencial caem com limiar 0,99, mas os de injeção só caem perto de 0,995, porque as notas dos textos difíceis ficam saturadas perto de 1.
+- **C10** (opção A): `multilingual` forçado com um limiar por pergunta. Os limiares saem de uma regra fixada antes (grade, FP em difíceis ≤ 0,15 no pool dev + validação, maior F1). A configuração é testada uma única vez num terceiro conjunto, com pelo menos 100 legítimos difíceis, contra C00 no mesmo conjunto.
+
+C08 fica como alternativa se o recall de injeção de C10 for baixo demais: custa duas chamadas ao sidecar por texto.
