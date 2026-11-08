@@ -622,7 +622,10 @@ async function main(): Promise<void> {
     `${LAYA_URL}/health`,
     "Suba o sidecar com: docker compose --profile laya up -d --build laya"
   );
-  await assertReachable(`${API_URL}/health`, "Suba o backend com: pnpm dev:backend");
+  // Só a 4.4 lê eventos do backend; a acurácia fala apenas com o sidecar.
+  if (STAGES === "all") {
+    await assertReachable(`${API_URL}/health`, "Suba o backend com: pnpm dev:backend");
+  }
   const warmup = await warmUpSidecar();
 
   console.log("## Experimento 4 — Laya (sidecar em modo sombra)\n");
