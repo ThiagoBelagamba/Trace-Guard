@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import {
+  buildIndex,
   evaluateCriterion,
   parseLayaConfig,
   wilsonInterval,
@@ -121,5 +122,38 @@ describe("wilsonInterval", () => {
     const [lo, hi] = wilsonInterval(9, 54);
     expect(lo).toBeCloseTo(0.09, 3);
     expect(hi).toBeCloseTo(0.287, 3);
+  });
+});
+
+describe("buildIndex", () => {
+  const c00 = config({ id: "C00", titulo: "Linha de base", status: "referencia", referencia: null, variante: "baseline", checkpoint: "roteamento", limiares: { prompt_injection: 0.8, secret_leak: 0.8 }, conjunto_teste: "validation" });
+  const c01 = config({ id: "C01", titulo: "R1–R3 roteamento", checkpoint: "roteamento", limiares: { prompt_injection: 0.85, secret_leak: 0.85 }, conjunto_teste: "validation" });
+  const c02 = config({ id: "C02", titulo: "multilingual forçado", status: "exploratoria", limiares: { prompt_injection: 0.85, secret_leak: 0.85 }, conjunto_teste: "validation" });
+  const results = [
+    REF,
+    result("C01", "validation", { f1: 0.864, recallSl: 0.615, hardFp: 15 }),
+    result("C02", "validation", { f1: 0.889, recallSl: 0.913, hardFp: 19 }),
+    result("C01", "dev", { f1: 0.909, recallSl: 0.9, hardFp: 2, hardTotal: 10 }),
+  ];
+  const index = buildIndex([c00, c01, c02], results);
+  const lines = index.split("\n");
+  const line = (id: string, set: string) => lines.find((l) => l.startsWith(`| ${id} `) && l.includes(`| ${set} |`)) ?? "";
+
+  it("splits pre-registered and exploratory configurations", () => {
+    expect(index).toContain("## Pré-registradas e referência");
+    const explo = lines.indexOf("## Exploratórias (sem pré-registro)");
+    expect(explo).toBeGreaterThan(0);
+    expect(lines.indexOf(line("C02", "validation"))).toBeGreaterThan(explo);
+  });
+
+  it("writes the verdict, the reference and the numbers", () => {
+    expect(line("C01", "validation").endsWith("| não passou |")).toBe(true);
+    expect(line("C00", "validation")).toContain("| referência |");
+    expect(line("C01", "validation")).toContain("15/54");
+    expect(line("C01", "validation")).toContain("0,864");
+  });
+
+  it("shows a dash when the reference has no result on that set", () => {
+    expect(line("C01", "dev").endsWith("| — |")).toBe(true);
   });
 });

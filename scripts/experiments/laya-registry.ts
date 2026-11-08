@@ -210,3 +210,71 @@ export function wilsonInterval(k: number, n: number, z = 1.96): [number, number]
   const half = (z * Math.sqrt((p * (1 - p)) / n + z2 / (4 * n * n))) / denom;
   return [Math.max(0, center - half), Math.min(1, center + half)];
 }
+
+function num(v: number | null, digits = 3): string {
+  return v === null ? "—" : v.toFixed(digits).replace(".", ",");
+}
+
+function describeCheckpoint(c: LayaConfig["checkpoint"]): string {
+  return typeof c === "string" ? c : `PI ${c.prompt_injection} · SL ${c.secret_leak}`;
+}
+
+function verdictCell(config: LayaConfig, r: LayaResult, byKey: Map<string, LayaResult>): string {
+  if (config.status === "referencia") return "referência";
+  const ref = config.referencia ? byKey.get(`${config.referencia}--${r.conjunto}`) : undefined;
+  return ref ? evaluateCriterion(config, r, ref).rotulo : "—";
+}
+
+const HEADER =
+  "| Id | Configuração | Status | Checkpoint | Limiar PI / SL | Conjunto | F1 | Recall SL | Recall PI | FP difíceis | Latência média (ms) | Veredito |\n" +
+  "|---|---|---|---|---|---|---:|---:|---:|---:|---:|---|";
+
+/** Índice comparativo (indice.md), gerado a partir dos JSON do registro. */
+export function buildIndex(configs: LayaConfig[], results: LayaResult[]): string {
+  const byId = new Map(configs.map((c) => [c.id, c]));
+  const byKey = new Map(results.map((r) => [`${r.config}--${r.conjunto}`, r]));
+  const row = (r: LayaResult): string | null => {
+    const c = byId.get(r.config);
+    if (!c) return null;
+    const m = r.metricas;
+    return [
+      "",
+      ` ${c.id} `,
+      ` ${c.titulo} `,
+      ` ${c.status} `,
+      ` ${describeCheckpoint(c.checkpoint)} `,
+      ` ${num(c.limiares.prompt_injection)} / ${num(c.limiares.secret_leak)} `,
+      ` ${r.conjunto} `,
+      ` ${num(m.f1)} `,
+      ` ${num(m.recallSl)} `,
+      ` ${num(m.recallPi)} `,
+      ` ${m.hardFp}/${m.hardTotal} `,
+      ` ${num(m.latencyMeanMs, 0)} `,
+      ` ${verdictCell(c, r, byKey)} `,
+      "",
+    ].join("|");
+  };
+  const formal = results.filter((r) => byId.get(r.config)?.status !== "exploratoria").map(row).filter(Boolean);
+  const explo = results.filter((r) => byId.get(r.config)?.status === "exploratoria").map(row).filter(Boolean);
+
+  return [
+    "# Registro de configurações — Experimento 4 (Laya)",
+    "",
+    "Gerado por `pnpm run experiment:laya:index`. Não editar à mão.",
+    "",
+    "Critério `tres-condicoes-v1` contra a referência no mesmo conjunto. Só configurações pré-registradas, no seu conjunto de teste, recebem \"passou\" ou \"não passou\".",
+    "",
+    "## Pré-registradas e referência",
+    "",
+    HEADER,
+    ...formal,
+    "",
+    "## Exploratórias (sem pré-registro)",
+    "",
+    "Definidas depois de ver os dados. Nunca recebem \"passou\".",
+    "",
+    HEADER,
+    ...explo,
+    "",
+  ].join("\n");
+}
