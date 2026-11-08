@@ -187,3 +187,8 @@ export function matchDeliveries(sent: SentCase[], events: RaspEvent[]): Delivery
     lostCaseIds,
   };
 }
+
+/** Checkpoints exigidos que ainda não responderam, na ordem de `required`. */
+export function pendingCheckpoints(seen: ReadonlySet<string>, required: readonly string[]): string[] {
+  return required.filter((name) => !seen.has(name));
+}

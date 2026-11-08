@@ -54,7 +54,10 @@ services:
       LAYA_PORT: "8000"
       LAYA_DEVICE: ${LAYA_DEVICE:-cpu}
       LAYA_PRELOAD: "1"
-      LAYA_MODELS: multilingual
+      # Os dois checkpoints que o roteamento por idioma escolhe; carregar o
+      # english sob demanda travou a 1ª execução do Experimento 4 por ~2 min.
+      LAYA_MODELS: multilingual,english
+      LAYA_MAX_LOADED: "2"
       LAYA_DEFAULT_MODEL: multilingual
       LAYA_THREADS: ${LAYA_THREADS:-4}
       LAYA_API_KEY: ${LAYA_API_KEY:-traceguard-secret}

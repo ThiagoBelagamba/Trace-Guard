@@ -35,6 +35,7 @@ import {
   buildAccuracyReport,
   majorityVerdict,
   matchDeliveries,
+  pendingCheckpoints,
   summarizeLatency,
   type CaseVerdict,
   type DeliveryReport,
@@ -48,7 +49,6 @@ const API_URL = (process.env.API_URL ?? "http://localhost:3001").replace(/\/$/, 
 const API_KEY = process.env.API_KEY;
 const DEMO_PORT = parseInt(process.env.EXPERIMENT_DEMO_PORT ?? "4100", 10);
 const REPS = 3;
-const SIDECAR_WARMUP = 3;
 const DEMO_WARMUP = 10;
 const DEMO_ENTRY = path.join("apps", "demo-api", "src", "index.ts");
 const BROWSER_UA =
@@ -71,25 +71,51 @@ function inspect(text: string): Promise<LayaInspectionResult | null> {
 }
 
 /**
- * O sidecar roteia por idioma (ex.: "english" e "multilingual") e baixa o
- * checkpoint na primeira chamada que cai nele. O aquecimento passa pelos dois
- * idiomas para que esse download não vire timeout dentro da medição.
+ * O sidecar roteia por idioma (ex.: "english" e "multilingual"). Um checkpoint
+ * que ainda está carregando segura até as requisições do outro idioma, e na
+ * 1ª execução isso virou timeout dentro da medição (relatório §8.1). O
+ * aquecimento só termina quando cada checkpoint exigido respondeu.
  */
 const WARMUP_TEXTS = [
   "Olá, qual o prazo de entrega para São Paulo?",
   "Hi, when will my order be shipped?",
 ];
+const REQUIRED_CHECKPOINTS: readonly string[] = ["multilingual", "english"];
+const WARMUP_DEADLINE_MS = 180_000;
+const WARMUP_CALL_TIMEOUT_MS = 30_000;
 
-async function warmUpSidecar(): Promise<void> {
-  let ok = 0;
-  for (let i = 0; i < SIDECAR_WARMUP * WARMUP_TEXTS.length; i++) {
-    if (await inspect(WARMUP_TEXTS[i % WARMUP_TEXTS.length]!)) ok += 1;
+async function warmUpSidecar(): Promise<{ elapsedMs: number; seen: string[] }> {
+  const started = Date.now();
+  const seen = new Set<string>();
+  let valid = 0;
+  for (let i = 0; Date.now() - started < WARMUP_DEADLINE_MS; i++) {
+    const text = extractWarmupText(i);
+    const result = await inspectPayloadWithLaya(text, LAYA_URL, LAYA_API_KEY, {
+      timeoutMs: WARMUP_CALL_TIMEOUT_MS,
+    });
+    if (result) {
+      valid += 1;
+      seen.add(result.modelUsed);
+      if (pendingCheckpoints(seen, REQUIRED_CHECKPOINTS).length === 0) {
+        return { elapsedMs: Date.now() - started, seen: [...seen] };
+      }
+    }
   }
-  if (ok === 0) {
+  if (valid === 0) {
     throw new Error(
       "sidecar respondeu /health mas /v1/systemone falhou — confira LAYA_API_KEY"
     );
   }
+  const pending = pendingCheckpoints(seen, REQUIRED_CHECKPOINTS);
+  throw new Error(
+    `aquecimento: sem resposta do(s) checkpoint(s) ${pending.join(", ")} em ${WARMUP_DEADLINE_MS / 1000} s. ` +
+      "Confira LAYA_MODELS=multilingual,english e o log do sidecar."
+  );
+}
+
+/** Mesmo payload do SDK para os textos de aquecimento, alternando PT e EN. */
+function extractWarmupText(i: number): string {
+  return JSON.stringify({ message: WARMUP_TEXTS[i % WARMUP_TEXTS.length]! });
 }
 
 async function runAccuracyStage(): Promise<{
@@ -437,10 +463,13 @@ async function main(): Promise<void> {
     "Suba o sidecar com: docker compose --profile laya up -d --build laya"
   );
   await assertReachable(`${API_URL}/health`, "Suba o backend com: pnpm dev:backend");
-  await warmUpSidecar();
+  const warmup = await warmUpSidecar();
 
   console.log("## Experimento 4 — Laya (sidecar em modo sombra)\n");
   console.log(`Sidecar: ${LAYA_URL}`);
+  console.log(
+    `Aquecimento: ${(warmup.elapsedMs / 1000).toFixed(1)} s · checkpoints: ${warmup.seen.join(", ")}`
+  );
   console.log(`Backend: ${API_URL}`);
   console.log(
     `Casos: ${LAYA_DATASET.length} · repetições por caso: ${REPS} · limiar noul ≥ ${LAYA_NOUL_THRESHOLD.toFixed(2)}\n`

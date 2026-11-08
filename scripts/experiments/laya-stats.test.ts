@@ -6,6 +6,7 @@ import {
   buildAccuracyReport,
   majorityVerdict,
   matchDeliveries,
+  pendingCheckpoints,
   summarizeLatency,
   type CaseVerdict,
   type SentCase,
@@ -179,5 +180,21 @@ describe("matchDeliveries", () => {
 
   it("reports a zero delivery rate when nothing was expected", () => {
     expect(matchDeliveries([], []).deliveryRate).toBe(0);
+  });
+});
+
+describe("pendingCheckpoints", () => {
+  const required = ["multilingual", "english"] as const;
+
+  it("lists every required checkpoint before any answer", () => {
+    expect(pendingCheckpoints(new Set(), required)).toEqual(["multilingual", "english"]);
+  });
+
+  it("keeps only the checkpoints that have not answered yet", () => {
+    expect(pendingCheckpoints(new Set(["english"]), required)).toEqual(["multilingual"]);
+  });
+
+  it("is empty once every required checkpoint answered, ignoring extras", () => {
+    expect(pendingCheckpoints(new Set(["english", "multilingual", "x"]), required)).toEqual([]);
   });
 });

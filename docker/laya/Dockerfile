@@ -5,7 +5,7 @@ FROM python:3.11-slim
 RUN useradd --create-home --uid 10001 --shell /usr/sbin/nologin laya \
     && pip install --no-cache-dir --index-url https://download.pytorch.org/whl/cpu torch \
     && python -c "import torch; open('/tmp/torch-constraint.txt','w').write('torch=='+torch.__version__+'\n')" \
-    && pip install --no-cache-dir -c /tmp/torch-constraint.txt 'laya[serve]' \
+    && pip install --no-cache-dir -c /tmp/torch-constraint.txt 'laya[serve]==0.4.12' \
     && python -c "import torch; assert '+cpu' in torch.__version__, torch.__version__"
 
 COPY entrypoint.py /usr/local/bin/laya-entrypoint.py
@@ -16,7 +16,7 @@ ENV HOME=/home/laya \
     LAYA_PORT=8000 \
     LAYA_DEVICE=cpu \
     LAYA_PRELOAD=1 \
-    LAYA_MODELS=multilingual \
+    LAYA_MODELS=multilingual,english \
     LAYA_DEFAULT_MODEL=multilingual \
     LAYA_THREADS=4
 
