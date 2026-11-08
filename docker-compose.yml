@@ -61,6 +61,8 @@ services:
       LAYA_DEFAULT_MODEL: multilingual
       LAYA_THREADS: ${LAYA_THREADS:-4}
       LAYA_API_KEY: ${LAYA_API_KEY:-traceguard-secret}
+      # Checkpoints locais (ex.: calibrados na R6), só usados com model= explícito.
+      LAYA_EXTRA_MODELS: ${LAYA_EXTRA_MODELS:-}
     ports:
       - "8000:8000"
     volumes:

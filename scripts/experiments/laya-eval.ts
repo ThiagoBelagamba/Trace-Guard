@@ -35,7 +35,10 @@ import { extractInspectableText } from "../../packages/sdk/src/rasp/laya-shadow.
 import { LAYA_DATASET, type LayaCase } from "./laya-dataset.ts";
 import { checkDatasetIntegrity, loadLayaDatasetFile } from "./laya-dataset-loader.ts";
 import {
+  brierScore,
   buildAccuracyReport,
+  calibrationPairs,
+  expectedCalibrationError,
   formatNoul,
   majorityVerdict,
   matchDeliveries,
@@ -278,6 +281,17 @@ function printAccuracy(run: AccuracyRun): void {
       `chamadas com falha (timeout/HTTP): ${failedCalls}/${DATASET.length * REPS} · ` +
       `tipo correto: ${report.typeCorrect.correct}/${report.typeCorrect.detected} ameaças detectadas`
   );
+
+  const rows = DATASET.map((item) => ({ item, verdict: verdicts.get(item.id) ?? null }));
+  console.log("\n**Calibração das notas** (p = noul mediano, y = rótulo do texto)\n");
+  console.log("| Sinal | n | Brier | ECE (10 bins) |");
+  console.log("|---|---:|---:|---:|");
+  for (const signal of ["prompt_injection", "secret_leak"] as const) {
+    const pairs = calibrationPairs(rows, signal);
+    console.log(
+      `| ${signal} | ${pairs.length} | ${brierScore(pairs).toFixed(3)} | ${expectedCalibrationError(pairs).toFixed(3)} |`
+    );
+  }
 
   console.log("\n### 4.2 Latência do modelo\n");
   console.log("| Alvo | média (ms) | p50 (ms) | p95 (ms) |");

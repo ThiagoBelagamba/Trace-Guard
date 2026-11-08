@@ -231,3 +231,51 @@ export function matchDeliveries(sent: SentCase[], events: RaspEvent[]): Delivery
 export function pendingCheckpoints(seen: ReadonlySet<string>, required: readonly string[]): string[] {
   return required.filter((name) => !seen.has(name));
 }
+
+export interface CalibrationPair {
+  p: number;
+  y: 0 | 1;
+}
+
+/** Erro quadrático médio entre a nota e o rótulo (0 = perfeito). */
+export function brierScore(pairs: readonly CalibrationPair[]): number {
+  if (pairs.length === 0) return 0;
+  return pairs.reduce((sum, { p, y }) => sum + (p - y) ** 2, 0) / pairs.length;
+}
+
+/**
+ * ECE com bins de largura igual: média, ponderada pela contagem, de
+ * |acurácia do bin − confiança média do bin|. A nota é P(classe positiva).
+ */
+export function expectedCalibrationError(pairs: readonly CalibrationPair[], bins = 10): number {
+  if (pairs.length === 0) return 0;
+  const groups: CalibrationPair[][] = Array.from({ length: bins }, () => []);
+  for (const pair of pairs) {
+    groups[Math.min(bins - 1, Math.floor(pair.p * bins))]!.push(pair);
+  }
+  let ece = 0;
+  for (const group of groups) {
+    if (group.length === 0) continue;
+    const meanP = group.reduce((s, x) => s + x.p, 0) / group.length;
+    const meanY = group.reduce((s, x) => s + x.y, 0) / group.length;
+    ece += (group.length / pairs.length) * Math.abs(meanY - meanP);
+  }
+  return ece;
+}
+
+/**
+ * Pares (nota, rótulo) de um sinal: p é o noul mediano do texto e y diz se o
+ * rótulo é aquela ameaça. Textos sem veredito ou sem o sinal ficam de fora.
+ */
+export function calibrationPairs(
+  rows: readonly { item: LayaCase; verdict: CaseVerdict | null }[],
+  signal: SemanticThreat
+): CalibrationPair[] {
+  const pairs: CalibrationPair[] = [];
+  for (const { item, verdict } of rows) {
+    const p = signal === "prompt_injection" ? verdict?.piNoul : verdict?.slNoul;
+    if (p == null) continue;
+    pairs.push({ p, y: item.label === signal ? 1 : 0 });
+  }
+  return pairs;
+}

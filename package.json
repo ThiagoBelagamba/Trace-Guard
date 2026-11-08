@@ -27,6 +27,7 @@
     "experiment:rasp": "tsx scripts/experiments/rasp-eval.ts",
     "experiment:overhead": "tsx scripts/experiments/overhead.ts",
     "experiment:laya": "tsx scripts/experiments/laya-eval.ts",
+    "experiment:laya:export-calibration": "tsx scripts/experiments/laya-calibration-export.ts",
     "load:test": "docker run --rm -i --add-host=host.docker.internal:host-gateway -v \"$(pwd)/scripts/load-test:/scripts\" grafana/k6 run -e API_URL=http://host.docker.internal:3001 /scripts/k6-ingest.js",
     "load:test:rasp": "docker run --rm -i --add-host=host.docker.internal:host-gateway -v \"$(pwd)/scripts/load-test:/scripts\" grafana/k6 run -e DEMO_API_URL=http://host.docker.internal:4000 /scripts/k6-rasp.js",
     "db:migrate:rasp": "docker compose exec -T postgres psql -U traceguard -d traceguard -f /docker-entrypoint-initdb.d/003_rasp_schema.sql"

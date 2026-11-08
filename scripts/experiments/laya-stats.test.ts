@@ -4,7 +4,10 @@ import type { LayaInspectionResult } from "../../packages/sdk/src/rasp/laya-insp
 import type { LayaCase } from "./laya-dataset.ts";
 import { BASELINE_POLICY } from "./laya-baseline.ts";
 import {
+  brierScore,
   buildAccuracyReport,
+  calibrationPairs,
+  expectedCalibrationError,
   formatNoul,
   majorityVerdict,
   matchDeliveries,
@@ -257,5 +260,57 @@ describe("buildAccuracyReport type attribution", () => {
       { item: item("bn", "benign", "en", true), verdict: right },
     ]);
     expect(report.typeCorrect).toEqual({ correct: 1, detected: 2 });
+  });
+});
+
+describe("brierScore", () => {
+  it("is zero for perfect confident predictions", () => {
+    expect(brierScore([{ p: 1, y: 1 }, { p: 0, y: 0 }])).toBe(0);
+  });
+
+  it("is 0.25 for a coin flip on a positive", () => {
+    expect(brierScore([{ p: 0.5, y: 1 }])).toBe(0.25);
+  });
+});
+
+describe("expectedCalibrationError", () => {
+  it("is zero when 0.9 predictions are right nine times out of ten", () => {
+    const pairs = [...Array(9).fill({ p: 0.9, y: 1 as const }), { p: 0.9, y: 0 as const }];
+    expect(expectedCalibrationError(pairs)).toBeCloseTo(0, 10);
+  });
+
+  it("is 0.9 when 0.9 predictions are always wrong", () => {
+    expect(expectedCalibrationError(Array(10).fill({ p: 0.9, y: 0 as const }))).toBeCloseTo(0.9, 10);
+  });
+});
+
+describe("calibrationPairs", () => {
+  const scored = (pi: number | null, sl: number | null): CaseVerdict => ({ ...verdict(false), piNoul: pi, slNoul: sl });
+
+  it("pairs each signal's noul with whether the label is that threat", () => {
+    const rows = [
+      { item: item("pi", "prompt_injection", "pt"), verdict: scored(0.9, 0.2) },
+      { item: item("sl", "secret_leak", "en"), verdict: scored(0.1, 0.8) },
+      { item: item("bn", "benign", "pt"), verdict: scored(0.3, 0.4) },
+    ];
+    expect(calibrationPairs(rows, "prompt_injection")).toEqual([
+      { p: 0.9, y: 1 },
+      { p: 0.1, y: 0 },
+      { p: 0.3, y: 0 },
+    ]);
+    expect(calibrationPairs(rows, "secret_leak")).toEqual([
+      { p: 0.2, y: 0 },
+      { p: 0.8, y: 1 },
+      { p: 0.4, y: 0 },
+    ]);
+  });
+
+  it("skips texts without a verdict or without that signal", () => {
+    const rows = [
+      { item: item("none", "benign", "pt"), verdict: null },
+      { item: item("nopi", "prompt_injection", "pt"), verdict: scored(null, 0.5) },
+    ];
+    expect(calibrationPairs(rows, "prompt_injection")).toEqual([]);
+    expect(calibrationPairs(rows, "secret_leak")).toEqual([{ p: 0.5, y: 0 }]);
   });
 });
