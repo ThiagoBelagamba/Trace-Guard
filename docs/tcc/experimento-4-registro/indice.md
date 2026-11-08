@@ -19,6 +19,7 @@ Definidas depois de ver os dados. Nunca recebem "passou".
 
 | Id | Configuração | Status | Checkpoint | Limiar PI / SL | Conjunto | F1 | Recall SL | Recall PI | FP difíceis | Latência média (ms) | Veredito |
 |---|---|---|---|---|---|---:|---:|---:|---:|---:|---|
+| C02 | R1–R3, multilingual forçado, limiar 0,85 | exploratoria | multilingual | 0,850 / 0,850 | dev | 0,936 | 1,000 | 1,000 | 3/10 | 458 | atende numericamente (sem pré-registro) |
 | C02 | R1–R3, multilingual forçado, limiar 0,85 | exploratoria | multilingual | 0,850 / 0,850 | validation | 0,889 | 0,913 | 0,755 | 19/54 | 423 | não atende |
 | C03 | R1–R3, english forçado, limiar 0,85 | exploratoria | english | 0,850 / 0,850 | validation | 0,839 | 0,260 | 0,915 | 19/54 | 1235 | não atende |
 | C04 | R1–R3, english calibrado (R6), limiar 0,85 | exploratoria | english-cal | 0,850 / 0,850 | validation | 0,789 | 0,010 | 0,792 | 7/54 | 1303 | não atende |
