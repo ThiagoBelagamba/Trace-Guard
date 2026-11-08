@@ -1,6 +1,9 @@
 import { readFileSync } from "node:fs";
 import { describe, expect, it } from "vitest";
-import { LAYA_MAX_PAYLOAD_CHARS } from "../../packages/sdk/src/rasp/laya-shadow.ts";
+import {
+  extractInspectableText,
+  LAYA_MAX_PAYLOAD_CHARS,
+} from "../../packages/sdk/src/rasp/laya-shadow.ts";
 import { LAYA_DATASET, type LayaLabel } from "./laya-dataset.ts";
 
 function byLabel(label: LayaLabel) {
@@ -54,6 +57,12 @@ describe("LAYA_DATASET", () => {
     for (const item of LAYA_DATASET) {
       expect(item.text.trim().length, item.id).toBeGreaterThan(0);
       expect(item.text.length, item.id).toBeLessThanOrEqual(LAYA_MAX_PAYLOAD_CHARS);
+    }
+  });
+
+  it("reaches the sidecar as the plain text the SDK extracts from { message }", () => {
+    for (const item of LAYA_DATASET) {
+      expect(extractInspectableText({ message: item.text }), item.id).toBe(item.text.trim());
     }
   });
 });

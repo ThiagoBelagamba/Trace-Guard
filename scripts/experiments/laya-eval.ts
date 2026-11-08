@@ -1,8 +1,9 @@
 /**
  * Experimento 4 — Laya (sidecar em modo sombra)
  *
- * 4.1 Acurácia: dataset rotulado direto no sidecar, com o mesmo payload
- *     ({"message": texto}), limiar e perguntas do SDK (inspectPayloadWithLaya).
+ * 4.1 Acurácia: dataset rotulado direto no sidecar, com o mesmo texto que o
+ *     sombra extrai de { message } (extractInspectableText), limiar e
+ *     perguntas do SDK (inspectPayloadWithLaya).
  * 4.2 Latência do modelo em /v1/systemone.
  * 4.3 Custo no caminho quente: o script sobe a demo-api duas vezes (sem e com
  *     LAYA_SIDECAR_URL) e mede POST /api/chat.
@@ -30,6 +31,7 @@ import {
   LAYA_NOUL_THRESHOLD,
   type LayaInspectionResult,
 } from "../../packages/sdk/src/rasp/laya-inspector.ts";
+import { extractInspectableText } from "../../packages/sdk/src/rasp/laya-shadow.ts";
 import { LAYA_DATASET } from "./laya-dataset.ts";
 import {
   buildAccuracyReport,
@@ -64,11 +66,17 @@ async function assertReachable(url: string, hint: string): Promise<void> {
 }
 
 /**
- * Classifica o texto como o SDK o envia em POST /api/chat: o sombra serializa
- * req.body inteiro, então o sidecar vê {"message":"..."} e não o texto cru.
+ * O texto que o sombra extrai do corpo de POST /api/chat ({ message }): o
+ * script passa pelo mesmo extractInspectableText do SDK.
  */
+function payloadFor(text: string): string {
+  const payload = extractInspectableText({ message: text });
+  if (payload === null) throw new Error(`texto sem conteúdo inspecionável: ${text.slice(0, 40)}`);
+  return payload;
+}
+
 function inspect(text: string): Promise<LayaInspectionResult | null> {
-  return inspectPayloadWithLaya(JSON.stringify({ message: text }), LAYA_URL, LAYA_API_KEY);
+  return inspectPayloadWithLaya(payloadFor(text), LAYA_URL, LAYA_API_KEY);
 }
 
 /**
@@ -90,7 +98,7 @@ async function warmUpSidecar(): Promise<{ elapsedMs: number; seen: string[] }> {
   const seen = new Set<string>();
   let valid = 0;
   for (let i = 0; Date.now() - started < WARMUP_DEADLINE_MS; i++) {
-    const text = extractWarmupText(i);
+    const text = payloadFor(WARMUP_TEXTS[i % WARMUP_TEXTS.length]!);
     const result = await inspectPayloadWithLaya(text, LAYA_URL, LAYA_API_KEY, {
       timeoutMs: WARMUP_CALL_TIMEOUT_MS,
     });
@@ -112,11 +120,6 @@ async function warmUpSidecar(): Promise<{ elapsedMs: number; seen: string[] }> {
     `aquecimento: sem resposta do(s) checkpoint(s) ${pending.join(", ")} em ${WARMUP_DEADLINE_MS / 1000} s. ` +
       "Confira LAYA_MODELS=multilingual,english e o log do sidecar."
   );
-}
-
-/** Mesmo payload do SDK para os textos de aquecimento, alternando PT e EN. */
-function extractWarmupText(i: number): string {
-  return JSON.stringify({ message: WARMUP_TEXTS[i % WARMUP_TEXTS.length]! });
 }
 
 async function runAccuracyStage(): Promise<{

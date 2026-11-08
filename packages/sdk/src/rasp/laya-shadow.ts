@@ -43,23 +43,30 @@ export interface LayaShadowJob {
   flush: () => Promise<void>;
 }
 
-function textFromBody(body: unknown): string | null {
-  if (typeof body === "string") {
-    const trimmed = body.trim();
-    if (!trimmed || trimmed.length > LAYA_MAX_PAYLOAD_CHARS) return null;
-    return trimmed;
-  }
-  if (typeof body !== "object" || body === null) return null;
+const MAX_BODY_DEPTH = 32;
 
-  let text: string;
-  try {
-    text = JSON.stringify(body);
-  } catch {
-    return null;
+function collectStrings(value: unknown, depth: number, out: string[]): void {
+  if (typeof value === "string") {
+    const trimmed = value.trim();
+    if (trimmed) out.push(trimmed);
+    return;
   }
-  if (!text || text === "{}" || text === "[]" || text.length > LAYA_MAX_PAYLOAD_CHARS) {
-    return null;
+  if (typeof value !== "object" || value === null || depth >= MAX_BODY_DEPTH) return;
+  for (const child of Array.isArray(value) ? value : Object.values(value)) {
+    collectStrings(child, depth + 1, out);
   }
+}
+
+/**
+ * Texto que o sidecar classifica: os valores string do corpo, em ordem, um
+ * por linha. O envelope JSON ({"message": ...}) mudava as notas de forma
+ * imprevisível (relatório do Experimento 4, §6.2).
+ */
+export function extractInspectableText(body: unknown): string | null {
+  const parts: string[] = [];
+  collectStrings(body, 0, parts);
+  const text = parts.join("\n");
+  if (!text || text.length > LAYA_MAX_PAYLOAD_CHARS) return null;
   return text;
 }
 
@@ -110,7 +117,7 @@ export function scheduleLayaInspection(job: LayaShadowJob): void {
   if (job.body === undefined || job.body === null) return;
 
   setImmediate(() => {
-    const text = textFromBody(job.body);
+    const text = extractInspectableText(job.body);
     if (!text) return;
     void inspectInBackground(job, text);
   });
