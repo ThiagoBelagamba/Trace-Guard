@@ -51,7 +51,8 @@ export function parseCaseScores(markdown: string, section: OutputSection): CaseS
   for (const line of sectionLines(markdown, section)) {
     const cells = line.split("|");
     // | id | idioma | rótulo | difícil | veredito | PI | SL |
-    if (cells.length < 9 || !/^\s*[a-z]+-[a-z]+-\d+\s*$/i.test(cells[1] ?? "")) continue;
+    // Ids: "val-pi-006" (validação) ou "pi-ignore-pt" (desenvolvimento); "Caso" e "---" ficam de fora.
+    if (cells.length < 9 || !/^\s*[a-z0-9]+(?:-[a-z0-9]+)+\s*$/i.test(cells[1] ?? "")) continue;
     const pi = readCell(cells[6] ?? "");
     const sl = readCell(cells[7] ?? "");
     scores.push({ id: cells[1]!.trim(), piNoul: pi.noul, piAbst: pi.abst, slNoul: sl.noul, slAbst: sl.abst });

@@ -1,0 +1,22 @@
+{
+  "id": "C09",
+  "titulo": "multilingual forçado, limiares por pergunta (ponto exploratório)",
+  "status": "exploratoria",
+  "motivada_por": [
+    "C02"
+  ],
+  "variante": "sdk",
+  "checkpoint": "multilingual",
+  "limiares": {
+    "prompt_injection": 0.995,
+    "secret_leak": 0.99
+  },
+  "min_confidence": 0.8,
+  "padroes_credencial": false,
+  "conjunto_ajuste": [
+    "validation"
+  ],
+  "conjunto_teste": "validation",
+  "criterio": "tres-condicoes-v1",
+  "referencia": "C00"
+}

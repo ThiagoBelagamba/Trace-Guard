@@ -60,6 +60,11 @@ describe("parseCaseScores", () => {
     expect(scores[2]?.piNoul).toBeNull();
   });
 
+  it("reads development-set ids, which have no number", () => {
+    const dev = OUTPUT.replace("| val-sl-001 | en |", "| pi-system-prompt-en | en |");
+    expect(parseCaseScores(dev, "sdk").map((s) => s.id)).toContain("pi-system-prompt-en");
+  });
+
   it("reads only the baseline section when asked", () => {
     const scores = parseCaseScores(OUTPUT, "baseline");
     expect(scores.map((s) => s.piNoul)).toEqual([0.5, 0.95, 0.01]);

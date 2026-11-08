@@ -1,0 +1,23 @@
+{
+  "config": "C01",
+  "conjunto": "dev",
+  "data": "2026-11-08",
+  "commit_config": null,
+  "origem": "extraido-de-saida",
+  "saida": "saidas/C01--dev.md",
+  "metricas": {
+    "tp": 20,
+    "fp": 2,
+    "fn": 2,
+    "tn": 16,
+    "precision": 0.9090909090909091,
+    "recall": 0.9090909090909091,
+    "f1": 0.9090909090909091,
+    "recallPi": 0.9166666666666666,
+    "recallSl": 0.9,
+    "hardFp": 2,
+    "hardTotal": 10,
+    "latencyMeanMs": 794.9,
+    "latencyP95Ms": 1583
+  }
+}

@@ -1,0 +1,20 @@
+{
+  "id": "C02",
+  "titulo": "R1–R3, multilingual forçado, limiar 0,85",
+  "status": "exploratoria",
+  "motivada_por": [
+    "C01"
+  ],
+  "variante": "sdk",
+  "checkpoint": "multilingual",
+  "limiares": {
+    "prompt_injection": 0.85,
+    "secret_leak": 0.85
+  },
+  "min_confidence": 0.8,
+  "padroes_credencial": false,
+  "conjunto_ajuste": [],
+  "conjunto_teste": "validation",
+  "criterio": "tres-condicoes-v1",
+  "referencia": "C00"
+}

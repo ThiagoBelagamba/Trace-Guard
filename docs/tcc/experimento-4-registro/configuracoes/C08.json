@@ -1,0 +1,25 @@
+{
+  "id": "C08",
+  "titulo": "Híbrido por pergunta: injeção do english, credencial do multilingual",
+  "status": "exploratoria",
+  "motivada_por": [
+    "C07"
+  ],
+  "variante": "sdk",
+  "checkpoint": {
+    "prompt_injection": "english",
+    "secret_leak": "multilingual"
+  },
+  "limiares": {
+    "prompt_injection": 0.97,
+    "secret_leak": 0.99
+  },
+  "min_confidence": 0.8,
+  "padroes_credencial": false,
+  "conjunto_ajuste": [
+    "validation"
+  ],
+  "conjunto_teste": "validation",
+  "criterio": "tres-condicoes-v1",
+  "referencia": "C00"
+}

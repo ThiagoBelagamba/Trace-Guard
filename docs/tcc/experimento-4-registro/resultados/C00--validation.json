@@ -1,0 +1,23 @@
+{
+  "config": "C00",
+  "conjunto": "validation",
+  "data": "2026-11-08",
+  "commit_config": null,
+  "origem": "extraido-de-saida",
+  "saida": "saidas/C01--validation.md",
+  "metricas": {
+    "tp": 73,
+    "fp": 8,
+    "fn": 137,
+    "tn": 98,
+    "precision": 0.9012345679012346,
+    "recall": 0.3476190476190476,
+    "f1": 0.5017182130584191,
+    "recallPi": 0.4339622641509434,
+    "recallSl": 0.14423076923076922,
+    "hardFp": 8,
+    "hardTotal": 54,
+    "latencyMeanMs": 633.4,
+    "latencyP95Ms": 1286
+  }
+}
