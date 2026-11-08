@@ -1,8 +1,10 @@
 import type { RaspEvent } from "@traceguard/shared";
 import {
   inspectPayloadWithLaya,
+  type LayaThresholds,
   type LayaInspectionResult,
 } from "./laya-inspector.js";
+import { detectSecretPatterns, type SecretPatternName } from "./secret-patterns.js";
 
 export const LAYA_MAX_PAYLOAD_CHARS = 8_000;
 const TEXT_METHODS = new Set(["POST", "PUT", "PATCH"]);
@@ -26,6 +28,29 @@ export function createLayaGate(maxInFlight: number): LayaGate {
   };
 }
 
+/**
+ * Cobertura do modo sombra (R8). Um corpo sem texto não entra em nenhum
+ * contador; scheduled = dropped + inspected + failed depois que tudo termina.
+ */
+export interface LayaShadowCounters {
+  /** Texto extraído e entregue ao gate. */
+  scheduled: number;
+  /** O gate estava cheio: o texto não foi inspecionado. */
+  dropped: number;
+  /** O sidecar respondeu. */
+  inspected: number;
+  /** Falha de transporte (resultado null), incluindo timeouts. */
+  failed: number;
+  /** Subconjunto de failed: o sidecar não respondeu dentro do prazo. */
+  timedOut: number;
+  /** Subconjunto de inspected: virou evento. */
+  flagged: number;
+}
+
+export function createLayaShadowCounters(): LayaShadowCounters {
+  return { scheduled: 0, dropped: 0, inspected: 0, failed: 0, timedOut: 0, flagged: 0 };
+}
+
 export interface LayaShadowJob {
   method: string;
   body: unknown;
@@ -37,30 +62,50 @@ export interface LayaShadowJob {
   path: string;
   layaUrl: string;
   apiKey?: string;
+  /** Checkpoint forçado (R7); sem ele o sidecar escolhe pelo idioma. */
+  model?: string;
+  /** Limiar por pergunta; sem ele, o padrão do inspetor (0,85 nas duas). */
+  thresholds?: LayaThresholds;
   gate: LayaGate;
+  counters?: LayaShadowCounters;
   inspect?: typeof inspectPayloadWithLaya;
   enqueue: (event: RaspEvent) => void;
   flush: () => Promise<void>;
 }
 
-function textFromBody(body: unknown): string | null {
-  if (typeof body === "string") {
-    const trimmed = body.trim();
-    if (!trimmed || trimmed.length > LAYA_MAX_PAYLOAD_CHARS) return null;
-    return trimmed;
-  }
-  if (typeof body !== "object" || body === null) return null;
+const MAX_BODY_DEPTH = 32;
 
-  let text: string;
-  try {
-    text = JSON.stringify(body);
-  } catch {
-    return null;
+function collectStrings(value: unknown, depth: number, out: string[]): void {
+  if (typeof value === "string") {
+    const trimmed = value.trim();
+    if (trimmed) out.push(trimmed);
+    return;
   }
-  if (!text || text === "{}" || text === "[]" || text.length > LAYA_MAX_PAYLOAD_CHARS) {
-    return null;
+  if (typeof value !== "object" || value === null || depth >= MAX_BODY_DEPTH) return;
+  for (const child of Array.isArray(value) ? value : Object.values(value)) {
+    collectStrings(child, depth + 1, out);
   }
-  return text;
+}
+
+/**
+ * Texto que o sidecar classifica: os valores string do corpo, em ordem, um
+ * por linha. O envelope JSON ({"message": ...}) mudava as notas de forma
+ * imprevisível (relatório do Experimento 4, §6.2).
+ */
+export function extractInspectableText(body: unknown): string | null {
+  return capForLaya(extractBodyText(body));
+}
+
+/** Todo o texto do corpo, sem o teto do sidecar; null quando não há texto. */
+function extractBodyText(body: unknown): string | null {
+  const parts: string[] = [];
+  collectStrings(body, 0, parts);
+  const text = parts.join("\n");
+  return text || null;
+}
+
+function capForLaya(text: string | null): string | null {
+  return text && text.length <= LAYA_MAX_PAYLOAD_CHARS ? text : null;
 }
 
 function toEvent(job: LayaShadowJob, result: LayaInspectionResult): RaspEvent {
@@ -87,12 +132,47 @@ function toEvent(job: LayaShadowJob, result: LayaInspectionResult): RaspEvent {
   };
 }
 
+/** Evento de padrão de credencial: só os nomes dos padrões, nunca o trecho casado. */
+function toPatternEvent(job: LayaShadowJob, patterns: SecretPatternName[]): RaspEvent {
+  return {
+    traceId: job.traceId,
+    spanId: job.spanId,
+    service: job.service,
+    threatType: "secret_leak",
+    action: "logged",
+    clientIp: job.clientIp,
+    userAgent: job.userAgent,
+    path: job.path,
+    method: job.method,
+    score: 100,
+    metadata: { source: "pattern", patterns },
+    timestamp: new Date().toISOString(),
+  };
+}
+
 async function inspectInBackground(job: LayaShadowJob, text: string): Promise<void> {
-  if (!job.gate.tryAcquire()) return;
+  const counters = job.counters;
+  if (counters) counters.scheduled += 1;
+  if (!job.gate.tryAcquire()) {
+    if (counters) counters.dropped += 1;
+    return;
+  }
   try {
     const inspect = job.inspect ?? inspectPayloadWithLaya;
-    const result = await inspect(text, job.layaUrl, job.apiKey);
-    if (!result?.flagged || !result.threatType) return;
+    const result = await inspect(text, job.layaUrl, job.apiKey, {
+      ...(job.model ? { model: job.model } : {}),
+      ...(job.thresholds ? { thresholds: job.thresholds } : {}),
+      onFailure: (kind) => {
+        if (counters && kind === "timeout") counters.timedOut += 1;
+      },
+    });
+    if (!result) {
+      if (counters) counters.failed += 1;
+      return;
+    }
+    if (counters) counters.inspected += 1;
+    if (!result.flagged || !result.threatType) return;
+    if (counters) counters.flagged += 1;
     job.enqueue(toEvent(job, result));
     await job.flush();
   } finally {
@@ -110,8 +190,16 @@ export function scheduleLayaInspection(job: LayaShadowJob): void {
   if (job.body === undefined || job.body === null) return;
 
   setImmediate(() => {
-    const text = textFromBody(job.body);
-    if (!text) return;
-    void inspectInBackground(job, text);
+    const fullText = extractBodyText(job.body);
+    if (!fullText) return;
+    // Antes do gate: a regex é síncrona e barata, então sobrevive a rajadas (ADR 010).
+    // Lê o corpo inteiro: um log longo com uma chave colada passa do teto do sidecar.
+    const patterns = detectSecretPatterns(fullText);
+    if (patterns.length > 0) {
+      job.enqueue(toPatternEvent(job, patterns));
+      void job.flush().catch(() => {});
+    }
+    const text = capForLaya(fullText);
+    if (text) void inspectInBackground(job, text);
   });
 }

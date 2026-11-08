@@ -2,7 +2,7 @@ import { createServer, type Server } from "node:http";
 import express from "express";
 import { afterEach, describe, expect, it } from "vitest";
 import { getContext } from "../core/context.js";
-import { initRaspRuntime, shutdownRaspRuntime } from "../runtime.js";
+import { getLayaShadowStats, initRaspRuntime, shutdownRaspRuntime } from "../runtime.js";
 import type { RaspEvent } from "@traceguard/shared";
 import { raspMiddleware } from "./express.js";
 
@@ -59,8 +59,9 @@ describe("raspMiddleware semantic shadow", () => {
             JSON.stringify({
               routing: { model: "multilingual" },
               answers: {
+                jailbreak: { noul: 0.3, answer_confidence: 0.7 },
                 prompt_injection: { noul: 0.91, answer_confidence: 0.91 },
-                secret_leak: { noul: 0.1, answer_confidence: 0.9 },
+                sensitive_data: { noul: 0.1, answer_confidence: 0.9 },
               },
             })
           );
@@ -177,5 +178,43 @@ describe("raspMiddleware semantic shadow", () => {
     await new Promise((resolve) => setImmediate(resolve));
     await new Promise((resolve) => setImmediate(resolve));
     expect(sidecarHits).toBe(0);
+  });
+
+  it("counts the inspections the middleware schedules", async () => {
+    expect(getLayaShadowStats()).toBeNull();
+
+    const sidecar = createServer((_request, response) => {
+      response.writeHead(500);
+      response.end();
+    });
+    const sidecarPort = await listen(sidecar);
+    const runtime = initRaspRuntime("demo-api", "http://127.0.0.1:9/rasp", {
+      mode: "monitor",
+      layaSidecarUrl: `http://127.0.0.1:${sidecarPort}`,
+    });
+    runtime.exporter.enqueue = () => {};
+    runtime.exporter.flush = async () => {};
+
+    const app = express();
+    app.use(express.json());
+    app.use(raspMiddleware());
+    app.post("/api/chat", (_req, res) => {
+      res.json({ ok: true });
+    });
+    const appPort = await listen(createServer(app));
+
+    await fetch(`http://127.0.0.1:${appPort}/api/chat`, {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ message: "oi" }),
+    });
+    for (let i = 0; i < 50 && getLayaShadowStats()?.failed !== 1; i++) {
+      await new Promise((resolve) => setTimeout(resolve, 10));
+    }
+
+    const stats = getLayaShadowStats();
+    expect(stats).toMatchObject({ scheduled: 1, dropped: 0, inspected: 0, failed: 1 });
+    (stats as { failed: number }).failed = 99;
+    expect(getLayaShadowStats()?.failed).toBe(1);
   });
 });

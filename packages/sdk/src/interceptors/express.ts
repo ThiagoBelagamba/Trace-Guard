@@ -94,7 +94,10 @@ export function raspMiddleware(options?: Partial<RaspConfig>): RequestHandler {
             path: incoming.path,
             layaUrl,
             apiKey: effectiveConfig.layaApiKey,
+            model: effectiveConfig.layaModel,
+            thresholds: effectiveConfig.layaThresholds,
             gate: runtime.layaGate,
+            counters: runtime.layaCounters,
             enqueue: (event) => runtime.exporter.enqueue(event),
             flush: () => runtime.exporter.flush(),
           });

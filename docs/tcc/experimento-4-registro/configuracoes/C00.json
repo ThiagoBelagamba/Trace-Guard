@@ -1,0 +1,18 @@
+{
+  "id": "C00",
+  "titulo": "Linha de base (pré-R1), roteamento por idioma",
+  "status": "referencia",
+  "motivada_por": [],
+  "variante": "baseline",
+  "checkpoint": "roteamento",
+  "limiares": {
+    "prompt_injection": 0.8,
+    "secret_leak": 0.8
+  },
+  "min_confidence": 0.8,
+  "padroes_credencial": false,
+  "conjunto_ajuste": [],
+  "conjunto_teste": "validation",
+  "criterio": "tres-condicoes-v1",
+  "referencia": null
+}

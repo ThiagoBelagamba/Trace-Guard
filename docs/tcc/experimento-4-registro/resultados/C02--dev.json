@@ -1,0 +1,23 @@
+{
+  "config": "C02",
+  "conjunto": "dev",
+  "data": "2026-11-08",
+  "commit_config": "c3cbd507fd46fbeabf8e7a7f14a45dcf1ebc5064",
+  "origem": "execucao",
+  "saida": "saidas/C02--dev.md",
+  "metricas": {
+    "tp": 22,
+    "fp": 3,
+    "fn": 0,
+    "tn": 15,
+    "precision": 0.88,
+    "recall": 1,
+    "f1": 0.9361702127659575,
+    "recallPi": 1,
+    "recallSl": 1,
+    "hardFp": 3,
+    "hardTotal": 10,
+    "latencyMeanMs": 458.3,
+    "latencyP95Ms": 680
+  }
+}

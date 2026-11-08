@@ -1,0 +1,24 @@
+{
+  "id": "C10",
+  "titulo": "Opção A: multilingual forçado, limiares por pergunta (regra pré-registrada)",
+  "status": "pre-registrada",
+  "motivada_por": [
+    "C02",
+    "C09"
+  ],
+  "variante": "sdk",
+  "checkpoint": "multilingual",
+  "limiares": {
+    "prompt_injection": 0.995,
+    "secret_leak": 0.99
+  },
+  "min_confidence": 0.8,
+  "padroes_credencial": false,
+  "conjunto_ajuste": [
+    "dev",
+    "validation"
+  ],
+  "conjunto_teste": "test",
+  "criterio": "tres-condicoes-v1",
+  "referencia": "C00"
+}

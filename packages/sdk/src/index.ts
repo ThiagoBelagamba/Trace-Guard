@@ -96,6 +96,9 @@ export function getServiceName(): string {
 }
 
 export { getRaspRuntime };
+export { getLayaShadowStats } from "./runtime.js";
+export type { LayaShadowCounters } from "./rasp/laya-shadow.js";
+export { DEFAULT_LAYA_THRESHOLDS, type LayaThresholds } from "./rasp/laya-inspector.js";
 
 /**
  * Executa uma função dentro de um novo trace root.
