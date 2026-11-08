@@ -84,14 +84,14 @@ Esta ficha e `configuracoes/C10.json` foram commitados juntos com a mensagem `pr
 
 ## 8. Resultado
 
-Executada uma única vez em 08/11/2026 no conjunto de teste (`scripts/experiments/data/laya-test.json`, commit `d858d4d`):
+Executada uma única vez em 08/11/2026 no conjunto de teste (`scripts/experiments/laya-experiments/data/laya-test.json`, commit `d858d4d`):
 - 357 textos: 99 de injeção, 96 de credencial e 162 legítimos, dos quais 132 difíceis;
 - 179 textos em português;
 - nenhuma chamada com falha.
 
 O cabeçalho da saída confirma o commit de pré-registro `55faa9d`. A referência C00 rodou no mesmo conjunto antes.
 
-Os dois resultados registram `codigo.modificado: true`. A única mudança local era um título `## NOVO CONJUNTO` em `scripts/experiments/data/README.md`, que não é código executado.
+Os dois resultados registram `codigo.modificado: true`. A única mudança local era um título `## NOVO CONJUNTO` em `scripts/experiments/laya-experiments/data/README.md`, que não é código executado.
 
 | Métrica | C00 (referência) | C10 |
 |---|---:|---:|

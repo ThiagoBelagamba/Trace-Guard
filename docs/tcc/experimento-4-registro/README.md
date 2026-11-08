@@ -14,7 +14,7 @@ saidas/Cnn--<conj>.md         saída bruta do script (gerado)
 indice.md                     tabela comparativa (gerado)
 ```
 
-`<conj>` é `dev` (40 textos do desenvolvimento), `validation` (316 textos independentes) ou `test` (o terceiro conjunto, `scripts/experiments/data/laya-test.json`).
+`<conj>` é `dev` (40 textos do desenvolvimento), `validation` (316 textos independentes) ou `test` (o terceiro conjunto, `scripts/experiments/laya-experiments/data/laya-test.json`).
 
 ## Ciclo de vida
 
@@ -72,6 +72,12 @@ Configurações exploratórias foram definidas depois de ver os dados. Elas most
 | `pnpm run experiment:laya:index` | Regenera `indice.md`. |
 | `pnpm run experiment:laya:backfill` | Regrava os resultados retroativos C00–C09 a partir das saídas salvas. |
 | `pnpm run experiment:laya:select -- --write Cnn` | Aplica a regra de seleção de limiares (C10) e grava no JSON ainda não commitado. |
+
+## Onde está o código
+
+O código que lê este registro, executa as configurações e gera o índice está em [`scripts/experiments/laya-experiments/`](../../../scripts/experiments/laya-experiments/README.md), principalmente em `registry/`. Os conjuntos `validation` e `test` estão em `scripts/experiments/laya-experiments/data/`.
+
+**Mudança de caminho (08/11/2026).** Depois do resultado de C10, os scripts foram movidos de `scripts/experiments/` para `scripts/experiments/laya-experiments/`, e os dados de `scripts/experiments/data/` para `scripts/experiments/laya-experiments/data/`. Só os caminhos mudaram. As seções congeladas das fichas (1 a 7) e os commits anteriores citam os caminhos antigos e não foram editados.
 
 ## Registros retroativos
 

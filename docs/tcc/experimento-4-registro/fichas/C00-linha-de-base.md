@@ -9,7 +9,7 @@
 
 ## 2. Motivação
 
-É a configuração anterior aos ajustes R1–R5, congelada em `scripts/experiments/laya-baseline.ts`: perguntas antigas, limiar 0,8, roteamento por idioma, escolha do tipo pela maior nota. Serve de comparação para todo o critério.
+É a configuração anterior aos ajustes R1–R5, congelada em `scripts/experiments/laya-experiments/core/laya-baseline.ts`: perguntas antigas, limiar 0,8, roteamento por idioma, escolha do tipo pela maior nota. Serve de comparação para todo o critério.
 
 ## 3. Hipótese
 

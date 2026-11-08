@@ -148,6 +148,19 @@ Redis (`REDIS_URL`): sincroniza WebSocket entre backends e rate limit RASP entre
 | `@traceguard/demo-app` | App de demonstração da PoC |
 | `@traceguard/demo-api` | API Express com RASP + scraper simulado |
 
+Pastas do repositório:
+
+```
+apps/          backend, dashboard, demo-api, demo-app
+packages/      sdk (telemetria + RASP + sombra do Laya) e shared (tipos e métricas)
+docker/        imagens auxiliares: laya/ (sidecar semântico) e postgres/
+scripts/
+  experiments/   experimentos do TCC (ver scripts/experiments/README.md)
+    laya-experiments/  Experimento 4: código, dataset e registro do Laya
+  load-test/     scripts k6
+docs/          ADRs, arquitetura, API e material do TCC (índice em docs/README.md)
+```
+
 ## Endpoints (Backend)
 
 | Método | Rota | Descrição |
@@ -170,11 +183,36 @@ Ver [`docs/api-v1.md`](docs/api-v1.md) para referência completa.
 ## Testes e experimentos (TCC)
 
 ```bash
-pnpm test                 # testes unitários do núcleo
+pnpm test                 # todos os testes (Vitest), incluindo os dos scripts de experimento
 pnpm experiment:fatigue   # Exp. 1 — fadiga de alertas (backend no ar)
 pnpm experiment:rasp      # Exp. 2 — precisão/recall do RASP (demo-api no ar)
 pnpm experiment:overhead  # Exp. 3 — p50/p95 health + ingest
+pnpm experiment:laya      # Exp. 4 — sidecar Laya (sidecar e backend no ar)
 ```
+
+Os scripts estão em [`scripts/experiments/`](scripts/experiments/README.md) e os resultados consolidados em [`docs/tcc/resultados-experimentos.md`](docs/tcc/resultados-experimentos.md).
+
+### Experimento 4 — Laya e o registro de configurações
+
+O Experimento 4 avalia se o sidecar semântico Laya (ADR 009), rodando em sombra, melhora a detecção do RASP sem marcar textos legítimos. Como o ajuste do modelo envolve muitas tentativas, cada configuração testada (checkpoint, limiares, perguntas) é **registrada antes de rodar**, para que nenhum parâmetro seja escolhido depois de ver o resultado.
+
+| O quê | Onde |
+|---|---|
+| Código, dataset e comandos | [`scripts/experiments/laya-experiments/`](scripts/experiments/laya-experiments/README.md) |
+| Regras do registro | [`docs/tcc/experimento-4-registro/README.md`](docs/tcc/experimento-4-registro/README.md) |
+| Tabela comparativa das configurações | [`docs/tcc/experimento-4-registro/indice.md`](docs/tcc/experimento-4-registro/indice.md) |
+| Relatório completo | [`docs/tcc/relatorio-experimento-4-laya.md`](docs/tcc/relatorio-experimento-4-laya.md) |
+
+**Padrão de registro**
+
+1. Cada configuração `Cnn` tem um JSON com os parâmetros (`configuracoes/Cnn.json`) e uma ficha com motivação, hipótese, resultado e veredito (`fichas/Cnn-<slug>.md`). O script lê os parâmetros direto do JSON: `LAYA_CONFIG=Cnn pnpm run experiment:laya`.
+2. **Pré-registro:** JSON e ficha (seções 1 a 7) entram juntos num commit `prereg(laya): Cnn <título>`, antes da execução. Depois disso não mudam; qualquer ajuste vira uma configuração nova.
+3. **Resultado:** a execução grava a saída bruta e as métricas; a ficha recebe o resultado e o commit é `result(laya): Cnn passou` ou `result(laya): Cnn não passou`. Configurações que não passaram continuam registradas e justificam as próximas.
+4. **Critério (`tres-condicoes-v1`), contra a linha de base C00 no mesmo conjunto:** F1 ≥ ref + 0,10; recall de credencial (`secret_leak`) ≥ ref + 0,20; taxa de falso positivo em legítimos difíceis ≤ ref + 0,05.
+5. **Palavras do veredito:** só uma configuração pré-registrada, executada no seu conjunto de teste, recebe "passou" ou "não passou". Configurações exploratórias recebem no máximo "atende numericamente (sem pré-registro)".
+6. O conjunto `test` (`laya-test.json`) só serve para veredito. O script se recusa a rodá-lo com configuração não commitada e não sobrescreve resultados já gravados nele.
+
+**Situação em 08/11/2026:** C00 é a linha de base. Há duas configurações pré-registradas, e nenhuma passou: a C01 (perguntas revisadas, limiar 0,85) não passou na validação, e C02 a C09 são exploratórias. A C10 (checkpoint `multilingual` forçado, limiares 0,995 para injeção e 0,99 para credencial) foi a primeira avaliada no conjunto de teste e **não passou**: atendeu ao F1 (0,663) e ao recall de credencial (0,688), mas marcou 29 de 132 legítimos difíceis (0,220, acima do limite de 0,186). Detalhes na [ficha da C10](docs/tcc/experimento-4-registro/fichas/C10-multilingual-limiares-por-pergunta.md).
 
 Clique em um **Trace ID** no dashboard para abrir o detalhe correlacionado (APM + RASP).
 

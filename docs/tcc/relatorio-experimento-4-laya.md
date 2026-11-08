@@ -56,7 +56,7 @@ Lido no código do pacote `laya` 0.4.12 e nas respostas cruas:
 - **Abstenção:** `confidence = max(noul, 1 − noul)`. Se `confidence < min_confidence` (0,8), a resposta sai como `abstained`. Na prática, **toda nota entre 0,2 e 0,8 é abstenção**. Com o limiar do SDK também em 0,8, a checagem de abstenção em `isHit` nunca muda o resultado.
 - **Aviso do próprio Laya no log:** `this checkpoint ships invalid temperatures or values outside [0.5, 5] … Treat confidence from the affected entries as uncalibrated.` As notas **não estão calibradas** e não devem ser lidas como probabilidades.
 
-### 2.3 Protocolo do script (`scripts/experiments/laya-eval.ts`)
+### 2.3 Protocolo do script (`scripts/experiments/laya-experiments/laya-eval.ts`)
 
 | Etapa | O que faz | Amostras |
 |---|---|---|
@@ -66,7 +66,7 @@ Lido no código do pacote `laya` 0.4.12 e nas respostas cruas:
 | 4.3 Custo no caminho quente | A demo-api sobe como processo filho em `:4100` (`RASP_MODE=monitor`). Rodada sem sidecar, rodada em rajada com sidecar e rodada ritmada (um envio por p95 do modelo). | 120 + 120 + 40 |
 | 4.4 Integração | Cada texto vai uma vez com `traceparent` próprio, e o script confere `/api/v1/rasp/events` pelo `traceId` | 40 |
 
-### 2.4 Dataset (`scripts/experiments/laya-dataset.ts`)
+### 2.4 Dataset (`scripts/experiments/laya-experiments/core/laya-dataset.ts`)
 
 | Classe | n | PT | EN | Categorias |
 |---|--:|--:|--:|---|
@@ -496,7 +496,7 @@ Não inclua a 1ª execução como resultado. Mencione-a só como incidente de in
 **Configuração.** `pnpm experiment:laya` com as duas variantes lado a lado, 3 repetições por texto, mesmo sidecar (`laya` 0.4.12, checkpoints `multilingual` e `english` pré-carregados).
 
 - **SDK atual (R1–R5):** texto extraído do corpo (R5), preset de guarda `jailbreak` / `prompt_injection` / `sensitive_data` lendo `prompt` (R1), prioridade de `secret_leak` (R2), limiar 0,85 (R3).
-- **Linha de base (pré-R1):** cópia congelada do inspector do commit `174b977` (`scripts/experiments/laya-baseline.ts`), com as perguntas antigas, o corpo JSON cru, limiar 0,8 e a regra do maior `noul`.
+- **Linha de base (pré-R1):** cópia congelada do inspector do commit `174b977` (`scripts/experiments/laya-experiments/core/laya-baseline.ts`), com as perguntas antigas, o corpo JSON cru, limiar 0,8 e a regra do maior `noul`.
 
 Aquecimento de 2,6 s, até os dois checkpoints responderem (R4): 60 chamadas foram para `multilingual` e 60 para `english` em cada variante. O sidecar ocupou 3,157 GiB de RAM com os dois checkpoints carregados (Task 1).
 
@@ -558,7 +558,7 @@ Integração por `traceId`: 22 de 22 alertas esperados chegaram ao backend com o
 
 > Registrado em 08/11/2026, **antes** de qualquer execução no conjunto de validação, e não alterado depois.
 
-No conjunto de validação (`scripts/experiments/data/laya-validation.json`, textos escritos sem olhar as notas do modelo, disjunto do conjunto de desenvolvimento), os ajustes R1–R3 "funcionam" se as três condições valerem:
+No conjunto de validação (`scripts/experiments/laya-experiments/data/laya-validation.json`, textos escritos sem olhar as notas do modelo, disjunto do conjunto de desenvolvimento), os ajustes R1–R3 "funcionam" se as três condições valerem:
 
 1. F1 binário do SDK atual ≥ F1 da linha de base + 0,10;
 2. recall de `secret_leak` ≥ linha de base + 0,20;
@@ -568,7 +568,7 @@ Execução prevista: `LAYA_DATASET=validation LAYA_STAGES=accuracy pnpm experime
 
 ### 14.2 Conjunto de validação
 
-`scripts/experiments/data/laya-validation.json`: 316 textos (106 `prompt_injection`, 104 `secret_leak`, 106 legítimos, dos quais 54 difíceis), metade em português e metade em inglês. `checkDatasetIntegrity` não apontou problemas: mínimo de 100 por classe, nenhum id ou texto repetido, nenhuma credencial sem `EXAMPLE` e nenhuma sobreposição com o conjunto de desenvolvimento.
+`scripts/experiments/laya-experiments/data/laya-validation.json`: 316 textos (106 `prompt_injection`, 104 `secret_leak`, 106 legítimos, dos quais 54 difíceis), metade em português e metade em inglês. `checkDatasetIntegrity` não apontou problemas: mínimo de 100 por classe, nenhum id ou texto repetido, nenhuma credencial sem `EXAMPLE` e nenhuma sobreposição com o conjunto de desenvolvimento.
 
 Execução: `LAYA_DATASET=validation LAYA_STAGES=accuracy pnpm experiment:laya`, 1 repetição por texto, roteamento por idioma (169 chamadas ao `multilingual` e 147 ao `english`) e nenhuma chamada com falha.
 

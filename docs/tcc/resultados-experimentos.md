@@ -61,7 +61,7 @@ p95 do ingest (3.2 ms) está muito abaixo do alvo de 500 ms do k6. Documente CPU
 
 Pré-requisitos: `pnpm build` (a demo-api usa o `dist` do SDK), `docker compose --profile laya up -d --build laya` e `pnpm dev:backend`.
 
-Comando: `pnpm experiment:laya`. Dataset rotulado em `scripts/experiments/laya-dataset.ts`: 40 textos (12 prompt injection, 10 credenciais fictícias, 18 legítimos, sendo 10 difíceis), metade em PT-BR e metade em EN.
+Comando: `pnpm experiment:laya`. Dataset rotulado em `scripts/experiments/laya-experiments/core/laya-dataset.ts`: 40 textos (12 prompt injection, 10 credenciais fictícias, 18 legítimos, sendo 10 difíceis), metade em PT-BR e metade em EN.
 
 Protocolo:
 
