@@ -48,6 +48,19 @@ Não houve: configuração exploratória.
 
 ## 8. Resultado
 
+**Conjunto `dev`** — saída: [`saidas/C02--dev.md`](../saidas/C02--dev.md) · origem: execucao
+
+| Métrica | Valor |
+|---|---:|
+| TP / FP / FN / TN | 22 / 3 / 0 / 15 |
+| Precisão | 0,880 |
+| Recall | 1,000 |
+| F1 | 0,936 |
+| Recall `prompt_injection` | 1,000 |
+| Recall `secret_leak` | 1,000 |
+| FP em legítimos difíceis | 3/10 |
+| Latência média / p95 (ms) | 458 / 680 |
+
 **Conjunto `validation`** — saída: [`saidas/C02--validation.md`](../saidas/C02--validation.md) · origem: extraido-de-saida
 
 | Métrica | Valor |
@@ -62,6 +75,14 @@ Não houve: configuração exploratória.
 | Latência média / p95 (ms) | 423 / 680 |
 
 ## 9. Veredito
+
+**`dev`: Configuração C02 atende numericamente (sem pré-registro).**
+
+| Condição | Valor | Exigido | Atende |
+|---|---:|---:|---|
+| F1 binário | 0,936 | ≥ 0,784 | sim |
+| Recall de secret_leak | 1,000 | ≥ 0,500 | sim |
+| Taxa de FP em legítimos difíceis | 0,300 | ≤ 0,350 | sim |
 
 **`validation`: Configuração C02 não atende.**
 

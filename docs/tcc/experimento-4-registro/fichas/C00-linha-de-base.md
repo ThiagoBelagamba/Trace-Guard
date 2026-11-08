@@ -70,10 +70,24 @@ Não se aplica.
 | FP em legítimos difíceis | 8/54 |
 | Latência média / p95 (ms) | 633 / 1286 |
 
+**Conjunto `test`** — saída: [`saidas/C00--test.md`](../saidas/C00--test.md) · origem: execucao
+
+| Métrica | Valor |
+|---|---:|
+| TP / FP / FN / TN | 75 / 18 / 120 / 144 |
+| Precisão | 0,806 |
+| Recall | 0,385 |
+| F1 | 0,521 |
+| Recall `prompt_injection` | 0,444 |
+| Recall `secret_leak` | 0,125 |
+| FP em legítimos difíceis | 18/132 |
+| Latência média / p95 (ms) | 704 / 1376 |
+
 ## 9. Veredito
 
 - `dev`: referência.
 - `validation`: referência.
+- `test`: referência.
 
 ## 10. Observações
 
