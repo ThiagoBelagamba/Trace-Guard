@@ -39,12 +39,16 @@ import {
   majorityVerdict,
   matchDeliveries,
   pendingCheckpoints,
+  SDK_POLICY,
   summarizeLatency,
+  type AccuracyReport,
   type CaseVerdict,
   type DeliveryReport,
   type LatencySummary,
   type SentCase,
+  type VerdictPolicy,
 } from "./laya-stats.ts";
+import { BASELINE_POLICY, inspectBaseline } from "./laya-baseline.ts";
 
 const LAYA_URL = (process.env.LAYA_SIDECAR_URL ?? "http://localhost:8000").replace(/\/$/, "");
 const LAYA_API_KEY = process.env.LAYA_API_KEY ?? "traceguard-secret";
@@ -122,12 +126,46 @@ async function warmUpSidecar(): Promise<{ elapsedMs: number; seen: string[] }> {
   );
 }
 
-async function runAccuracyStage(): Promise<{
+/**
+ * Configurações comparadas na 4.1. `sdk` é a atual (é a que a demo-api usa
+ * na 4.3/4.4); `baseline` é a cópia congelada de antes dos ajustes R1–R5.
+ */
+interface Variant {
+  id: "sdk" | "baseline";
+  label: string;
+  inspect(text: string): Promise<LayaInspectionResult | null>;
+  policy: VerdictPolicy;
+}
+
+const ALL_VARIANTS: readonly Variant[] = [
+  { id: "sdk", label: "SDK atual (R1–R5)", inspect, policy: SDK_POLICY },
+  {
+    id: "baseline",
+    label: "Linha de base (pré-R1)",
+    inspect: (text) => inspectBaseline(text, LAYA_URL, LAYA_API_KEY),
+    policy: BASELINE_POLICY,
+  },
+];
+
+/** LAYA_VARIANTS (padrão "sdk,baseline"); `sdk` sempre roda, porque a 4.4 depende dele. */
+function selectedVariants(): Variant[] {
+  const wanted = new Set(
+    (process.env.LAYA_VARIANTS ?? "sdk,baseline").split(",").map((v) => v.trim()).filter(Boolean)
+  );
+  wanted.add("sdk");
+  return ALL_VARIANTS.filter((v) => wanted.has(v.id));
+}
+
+interface AccuracyRun {
+  variant: Variant;
   verdicts: Map<string, CaseVerdict | null>;
   modelLatency: LatencySummary;
   models: Map<string, number>;
   failedCalls: number;
-}> {
+  report: AccuracyReport;
+}
+
+async function runAccuracyStage(variant: Variant): Promise<AccuracyRun> {
   const verdicts = new Map<string, CaseVerdict | null>();
   const latencies: number[] = [];
   const models = new Map<string, number>();
@@ -136,7 +174,7 @@ async function runAccuracyStage(): Promise<{
   for (const item of LAYA_DATASET) {
     const runs: (LayaInspectionResult | null)[] = [];
     for (let rep = 0; rep < REPS; rep++) {
-      const result = await inspect(item.text);
+      const result = await variant.inspect(item.text);
       if (result) {
         latencies.push(result.latencyMs);
         models.set(result.modelUsed, (models.get(result.modelUsed) ?? 0) + 1);
@@ -145,10 +183,13 @@ async function runAccuracyStage(): Promise<{
       }
       runs.push(result);
     }
-    verdicts.set(item.id, majorityVerdict(runs));
+    verdicts.set(item.id, majorityVerdict(runs, variant.policy));
   }
 
-  return { verdicts, modelLatency: summarizeLatency(latencies), models, failedCalls };
+  const report = buildAccuracyReport(
+    LAYA_DATASET.map((item) => ({ item, verdict: verdicts.get(item.id) ?? null }))
+  );
+  return { variant, verdicts, modelLatency: summarizeLatency(latencies), models, failedCalls, report };
 }
 
 function verdictLabel(verdict: CaseVerdict | null): string {
@@ -179,13 +220,9 @@ function printLatencyRow(label: string, s: LatencySummary): void {
   console.log(`| ${label} | ${s.avg.toFixed(1)} | ${s.p50.toFixed(1)} | ${s.p95.toFixed(1)} |`);
 }
 
-function printAccuracy(
-  verdicts: Map<string, CaseVerdict | null>,
-  modelLatency: LatencySummary,
-  models: Map<string, number>,
-  failedCalls: number
-): void {
-  console.log("### 4.1 Acurácia\n");
+function printAccuracy(run: AccuracyRun): void {
+  const { verdicts, modelLatency, models, failedCalls, report } = run;
+  console.log(`### 4.1 Acurácia — ${run.variant.label}\n`);
   console.log("| Caso | Idioma | Rótulo | Difícil | Veredito | noul PI | noul SL |");
   console.log("|---|---|---|---|---|---:|---:|");
   for (const item of LAYA_DATASET) {
@@ -197,10 +234,6 @@ function printAccuracy(
 
   console.log("\nNotas com 3 casas. (abst.) = o sidecar se absteve (confidence < min_confidence).");
 
-  const report = buildAccuracyReport(
-    LAYA_DATASET.map((item) => ({ item, verdict: verdicts.get(item.id) ?? null }))
-  );
-
   printMetricsTable("Binário (ameaça vs. legítimo)", report.binary);
   printMetricsTable("prompt_injection", report.promptInjection);
   printMetricsTable("secret_leak", report.secretLeak);
@@ -211,7 +244,8 @@ function printAccuracy(
       `textos instáveis entre repetições: ${report.unstable}/${report.evaluated} · ` +
       `textos sem nenhuma resposta (fora das métricas): ${report.transportErrors} · ` +
       `textos decididos com menos de ${REPS} execuções: ${report.partialTexts} · ` +
-      `chamadas com falha (timeout/HTTP): ${failedCalls}/${LAYA_DATASET.length * REPS}`
+      `chamadas com falha (timeout/HTTP): ${failedCalls}/${LAYA_DATASET.length * REPS} · ` +
+      `tipo correto: ${report.typeCorrect.correct}/${report.typeCorrect.detected} ameaças detectadas`
   );
 
   console.log("\n### 4.2 Latência do modelo\n");
@@ -223,6 +257,27 @@ function printAccuracy(
   }
   const routing = [...models.entries()].map(([name, n]) => `${name} ${n}`).join(" · ");
   console.log(`\nRoteamento do sidecar (chamadas por checkpoint): ${routing || "—"}`);
+}
+
+/** Mesmas métricas lado a lado, uma coluna por configuração. */
+function printComparison(runs: AccuracyRun[]): void {
+  if (runs.length < 2) return;
+  console.log("\n### 4.1 Comparação entre configurações\n");
+  console.log(`| Métrica | ${runs.map((r) => r.variant.label).join(" | ")} |`);
+  console.log(`|---|${runs.map(() => "---:").join("|")}|`);
+  const row = (label: string, value: (r: AccuracyRun) => string) =>
+    console.log(`| ${label} | ${runs.map(value).join(" | ")} |`);
+  row("TP / FP / FN / TN", ({ report: { binary: b } }) => `${b.tp} / ${b.fp} / ${b.fn} / ${b.tn}`);
+  row("Precisão", (r) => r.report.binary.precision.toFixed(3));
+  row("Recall", (r) => r.report.binary.recall.toFixed(3));
+  row("F1", (r) => r.report.binary.f1.toFixed(3));
+  row("Youden", (r) => r.report.binary.youden.toFixed(3));
+  row("Recall prompt_injection", (r) => r.report.promptInjection.recall.toFixed(3));
+  row("Recall secret_leak", (r) => r.report.secretLeak.recall.toFixed(3));
+  row("FP em legítimos difíceis", (r) => `${r.report.hardBenign.falsePositives}/${r.report.hardBenign.total}`);
+  row("Tipo correto", (r) => `${r.report.typeCorrect.correct}/${r.report.typeCorrect.detected}`);
+  row("Latência do modelo, média (ms)", (r) => r.modelLatency.avg.toFixed(0));
+  row("Latência do modelo, p95 (ms)", (r) => r.modelLatency.p95.toFixed(0));
 }
 
 // ── Demo-api como processo filho ───────────────────────────────────────
@@ -477,8 +532,14 @@ async function main(): Promise<void> {
     `Casos: ${LAYA_DATASET.length} · repetições por caso: ${REPS} · limiar noul ≥ ${LAYA_NOUL_THRESHOLD.toFixed(2)}\n`
   );
 
-  const { verdicts, modelLatency, models, failedCalls } = await runAccuracyStage();
-  printAccuracy(verdicts, modelLatency, models, failedCalls);
+  const runs: AccuracyRun[] = [];
+  for (const variant of selectedVariants()) {
+    const run = await runAccuracyStage(variant);
+    printAccuracy(run);
+    runs.push(run);
+  }
+  printComparison(runs);
+  const { verdicts, modelLatency } = runs[0]!;
   const pacingMs = Math.max(100, Math.ceil(modelLatency.p95));
 
   const withoutDemo = await startDemoApi(false);

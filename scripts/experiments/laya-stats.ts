@@ -11,6 +11,7 @@ import {
   isHit,
   pickThreatType,
   type LayaInspectionResult,
+  type LayaSignal,
 } from "../../packages/sdk/src/rasp/laya-inspector.ts";
 import type { LayaCase } from "./laya-dataset.ts";
 
@@ -57,15 +58,35 @@ function median(values: number[]): number | null {
   return sorted.length % 2 === 1 ? sorted[mid]! : (sorted[mid - 1]! + sorted[mid]!) / 2;
 }
 
+/** Regras de decisão de uma configuração: limiar (isHit) e escolha do tipo. */
+export interface VerdictPolicy {
+  isHit(signal: LayaSignal | undefined): boolean;
+  pickThreatType(
+    piHit: boolean,
+    slHit: boolean,
+    piNoul: number | null,
+    slNoul: number | null
+  ): SemanticThreat | undefined;
+}
+
+/** As regras do SDK atual (limiar 0,85 e prioridade para secret_leak). */
+export const SDK_POLICY: VerdictPolicy = {
+  isHit,
+  pickThreatType: (piHit, slHit) => pickThreatType(piHit, slHit),
+};
+
 /** Maioria estrita das execuções válidas; empate conta como não marcado. */
-export function majorityVerdict(runs: (LayaInspectionResult | null)[]): CaseVerdict | null {
+export function majorityVerdict(
+  runs: (LayaInspectionResult | null)[],
+  policy: VerdictPolicy = SDK_POLICY
+): CaseVerdict | null {
   const valid = runs.filter((r): r is LayaInspectionResult => r !== null);
   if (valid.length === 0) return null;
 
   const majority = (count: number) => count > valid.length / 2;
   const flaggedCount = valid.filter((r) => r.flagged).length;
-  const piHit = majority(valid.filter((r) => isHit(r.signals.prompt_injection)).length);
-  const slHit = majority(valid.filter((r) => isHit(r.signals.secret_leak)).length);
+  const piHit = majority(valid.filter((r) => policy.isHit(r.signals.prompt_injection)).length);
+  const slHit = majority(valid.filter((r) => policy.isHit(r.signals.secret_leak)).length);
   const piAbstained = majority(valid.filter((r) => r.signals.prompt_injection?.abstention === "abstained").length);
   const slAbstained = majority(valid.filter((r) => r.signals.secret_leak?.abstention === "abstained").length);
   const flagged = majority(flaggedCount);
@@ -73,7 +94,7 @@ export function majorityVerdict(runs: (LayaInspectionResult | null)[]): CaseVerd
   const piNoul = median(valid.flatMap((r) => (r.signals.prompt_injection ? [r.signals.prompt_injection.noul] : [])));
   const slNoul = median(valid.flatMap((r) => (r.signals.secret_leak ? [r.signals.secret_leak.noul] : [])));
 
-  const threatType = pickThreatType(piHit, slHit);
+  const threatType = policy.pickThreatType(piHit, slHit, piNoul, slNoul);
 
   const verdict: CaseVerdict = {
     flagged,
@@ -108,6 +129,8 @@ export interface AccuracyReport {
   unstable: number;
   /** Textos decididos com menos execuções válidas do que as pedidas (timeouts parciais). */
   partialTexts: number;
+  /** Ameaças marcadas cujo tipo atribuído é igual ao rótulo. */
+  typeCorrect: { correct: number; detected: number };
 }
 
 function recallFor(rows: { item: LayaCase; verdict: CaseVerdict }[], lang: LayaCase["lang"]): number {
@@ -123,6 +146,7 @@ export function buildAccuracyReport(
     (r): r is { item: LayaCase; verdict: CaseVerdict } => r.verdict !== null
   );
   const hard = evaluated.filter((r) => r.item.label === "benign" && r.item.hard);
+  const detectedThreats = evaluated.filter((r) => r.item.label !== "benign" && r.verdict.flagged);
 
   return {
     evaluated: evaluated.length,
@@ -140,6 +164,10 @@ export function buildAccuracyReport(
     recallByLang: { pt: recallFor(evaluated, "pt"), en: recallFor(evaluated, "en") },
     unstable: evaluated.filter((r) => !r.verdict.stable).length,
     partialTexts: evaluated.filter((r) => r.verdict.validRuns < r.verdict.totalRuns).length,
+    typeCorrect: {
+      correct: detectedThreats.filter((r) => r.verdict.threatType === r.item.label).length,
+      detected: detectedThreats.length,
+    },
   };
 }
 

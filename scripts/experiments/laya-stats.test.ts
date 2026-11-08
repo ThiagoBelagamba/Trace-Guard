@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import type { RaspEvent } from "../../packages/shared/src/rasp.ts";
 import type { LayaInspectionResult } from "../../packages/sdk/src/rasp/laya-inspector.ts";
 import type { LayaCase } from "./laya-dataset.ts";
+import { BASELINE_POLICY } from "./laya-baseline.ts";
 import {
   buildAccuracyReport,
   formatNoul,
@@ -234,5 +235,27 @@ describe("majorityVerdict abstention", () => {
       piAbstained: false,
       slAbstained: false,
     });
+  });
+});
+
+describe("majorityVerdict with a policy", () => {
+  it("applies the baseline 0.8 threshold when asked", () => {
+    expect(majorityVerdict([run(0.82, 0.1), run(0.82, 0.1), run(0.82, 0.1)], BASELINE_POLICY)).toMatchObject({
+      piHit: true,
+      threatType: "prompt_injection",
+    });
+  });
+});
+
+describe("buildAccuracyReport type attribution", () => {
+  it("counts detected threats whose type matches the label", () => {
+    const wrong = { ...verdict(true, false, true), threatType: "secret_leak" as const };
+    const right = { ...verdict(true, false, true), threatType: "secret_leak" as const };
+    const report = buildAccuracyReport([
+      { item: item("pi", "prompt_injection", "pt"), verdict: wrong },
+      { item: item("sl", "secret_leak", "en"), verdict: right },
+      { item: item("bn", "benign", "en", true), verdict: right },
+    ]);
+    expect(report.typeCorrect).toEqual({ correct: 1, detected: 2 });
   });
 });
