@@ -36,7 +36,11 @@ export interface LayaInspectOptions {
   now?: () => number;
   /** Força um checkpoint (`model` no corpo). Sem ele, o sidecar roteia por idioma. */
   model?: string;
+  /** Chamado quando a inspeção falha no transporte (o resultado é null). */
+  onFailure?: (kind: LayaFailureKind) => void;
 }
+
+export type LayaFailureKind = "timeout" | "http" | "network";
 
 /**
  * As três perguntas noul de `guard_questions()` (laya/presets.py, 0.4.12),
@@ -142,7 +146,10 @@ export async function inspectPayloadWithLaya(
       signal: AbortSignal.timeout(options?.timeoutMs ?? LAYA_TIMEOUT_MS),
     });
 
-    if (!response.ok) return null;
+    if (!response.ok) {
+      options?.onFailure?.("http");
+      return null;
+    }
 
     const data = (await response.json()) as {
       routing?: { model?: string };
@@ -188,7 +195,9 @@ export async function inspectPayloadWithLaya(
       latencyMs,
       signals,
     };
-  } catch {
+  } catch (error) {
+    const timedOut = error instanceof Error && error.name === "TimeoutError";
+    options?.onFailure?.(timedOut ? "timeout" : "network");
     return null;
   }
 }

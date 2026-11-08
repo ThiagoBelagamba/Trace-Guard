@@ -1,6 +1,11 @@
 import { RaspDetector } from "./rasp/detector.js";
 import { RaspExporter } from "./rasp/emitter.js";
-import { createLayaGate, type LayaGate } from "./rasp/laya-shadow.js";
+import {
+  createLayaGate,
+  createLayaShadowCounters,
+  type LayaGate,
+  type LayaShadowCounters,
+} from "./rasp/laya-shadow.js";
 import { createRateLimiter, RedisRateLimiter } from "./rasp/redis-rate-limiter.js";
 import type { RaspConfig } from "./rasp/types.js";
 import { DEFAULT_RASP_CONFIG } from "./rasp/types.js";
@@ -12,6 +17,7 @@ export interface RaspRuntime {
   config: RaspConfig;
   redisLimiter: RedisRateLimiter | null;
   layaGate: LayaGate;
+  layaCounters: LayaShadowCounters;
 }
 
 let raspRuntime: RaspRuntime | null = null;
@@ -37,12 +43,18 @@ export function initRaspRuntime(
     config: merged,
     redisLimiter,
     layaGate: createLayaGate(merged.layaMaxInFlight ?? 4),
+    layaCounters: createLayaShadowCounters(),
   };
   return raspRuntime;
 }
 
 export function getRaspRuntime(): RaspRuntime | null {
   return raspRuntime;
+}
+
+/** Cópia dos contadores do modo sombra (R8), ou null antes do init(). */
+export function getLayaShadowStats(): Readonly<LayaShadowCounters> | null {
+  return raspRuntime ? { ...raspRuntime.layaCounters } : null;
 }
 
 export async function shutdownRaspRuntime(): Promise<void> {

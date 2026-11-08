@@ -3,6 +3,7 @@ import type { RaspEvent } from "@traceguard/shared";
 import type { LayaInspectionResult } from "./laya-inspector.js";
 import {
   createLayaGate,
+  createLayaShadowCounters,
   extractInspectableText,
   LAYA_MAX_PAYLOAD_CHARS,
   scheduleLayaInspection,
@@ -186,5 +187,53 @@ describe("extractInspectableText", () => {
 
   it("returns null when the text exceeds the payload cap", () => {
     expect(extractInspectableText({ message: "x".repeat(LAYA_MAX_PAYLOAD_CHARS + 1) })).toBeNull();
+  });
+});
+
+describe("laya shadow counters", () => {
+  it("counts the job the gate refuses and the one it inspects", async () => {
+    const counters = createLayaShadowCounters();
+    const gate = createLayaGate(1);
+    const slow = () => new Promise<LayaInspectionResult>((resolve) => setTimeout(() => resolve(flagged()), 5));
+    job({ gate, counters, inspect: slow });
+    job({ gate, counters, inspect: slow });
+
+    await settle();
+    await new Promise((resolve) => setTimeout(resolve, 20));
+
+    expect(counters).toEqual({ scheduled: 2, dropped: 1, inspected: 1, failed: 0, timedOut: 0, flagged: 1 });
+  });
+
+  it("counts a null result as a failure", async () => {
+    const counters = createLayaShadowCounters();
+    job({ counters, inspect: async () => null });
+
+    await settle();
+
+    expect(counters).toMatchObject({ scheduled: 1, inspected: 0, failed: 1, flagged: 0 });
+  });
+
+  it("counts a timeout reported by the inspector", async () => {
+    const counters = createLayaShadowCounters();
+    job({
+      counters,
+      inspect: async (_text, _url, _key, options) => {
+        options?.onFailure?.("timeout");
+        return null;
+      },
+    });
+
+    await settle();
+
+    expect(counters).toMatchObject({ failed: 1, timedOut: 1 });
+  });
+
+  it("does not count a body without text", async () => {
+    const counters = createLayaShadowCounters();
+    job({ counters, body: { qty: 2 } });
+
+    await settle();
+
+    expect(counters).toEqual(createLayaShadowCounters());
   });
 });

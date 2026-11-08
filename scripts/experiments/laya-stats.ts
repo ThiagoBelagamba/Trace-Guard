@@ -14,6 +14,7 @@ import {
   type LayaSignal,
 } from "../../packages/sdk/src/rasp/laya-inspector.ts";
 import type { LayaCase } from "./laya-dataset.ts";
+import type { LayaShadowCounters } from "../../packages/sdk/src/rasp/laya-shadow.ts";
 
 type SemanticThreat = "prompt_injection" | "secret_leak";
 
@@ -278,4 +279,16 @@ export function calibrationPairs(
     pairs.push({ p, y: item.label === signal ? 1 : 0 });
   }
   return pairs;
+}
+
+/** Contadores do sombra acumulados entre duas leituras do /health da demo-api. */
+export function diffShadowStats(before: LayaShadowCounters, after: LayaShadowCounters): LayaShadowCounters {
+  return {
+    scheduled: after.scheduled - before.scheduled,
+    dropped: after.dropped - before.dropped,
+    inspected: after.inspected - before.inspected,
+    failed: after.failed - before.failed,
+    timedOut: after.timedOut - before.timedOut,
+    flagged: after.flagged - before.flagged,
+  };
 }

@@ -7,6 +7,7 @@ import {
   brierScore,
   buildAccuracyReport,
   calibrationPairs,
+  diffShadowStats,
   expectedCalibrationError,
   formatNoul,
   majorityVerdict,
@@ -312,5 +313,20 @@ describe("calibrationPairs", () => {
     ];
     expect(calibrationPairs(rows, "prompt_injection")).toEqual([]);
     expect(calibrationPairs(rows, "secret_leak")).toEqual([{ p: 0.5, y: 0 }]);
+  });
+});
+
+describe("diffShadowStats", () => {
+  it("subtracts the snapshot taken before a round", () => {
+    const before = { scheduled: 10, dropped: 2, inspected: 8, failed: 0, timedOut: 0, flagged: 3 };
+    const after = { scheduled: 130, dropped: 100, inspected: 28, failed: 2, timedOut: 1, flagged: 12 };
+    expect(diffShadowStats(before, after)).toEqual({
+      scheduled: 120,
+      dropped: 98,
+      inspected: 20,
+      failed: 2,
+      timedOut: 1,
+      flagged: 9,
+    });
   });
 });

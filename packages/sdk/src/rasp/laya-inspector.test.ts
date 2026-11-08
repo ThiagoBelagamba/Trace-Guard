@@ -225,4 +225,39 @@ describe("inspectPayloadWithLaya", () => {
 
     expect(result).toBeNull();
   });
+
+  it("reports a timeout to onFailure", async () => {
+    const kinds: string[] = [];
+    const result = await inspectPayloadWithLaya("oi", "http://laya", undefined, {
+      fetchImpl: async () => {
+        throw new DOMException("x", "TimeoutError");
+      },
+      onFailure: (kind) => kinds.push(kind),
+    });
+
+    expect(result).toBeNull();
+    expect(kinds).toEqual(["timeout"]);
+  });
+
+  it("reports an HTTP error to onFailure", async () => {
+    const kinds: string[] = [];
+    await inspectPayloadWithLaya("oi", "http://laya", undefined, {
+      fetchImpl: async () => jsonResponse({ detail: "boom" }, 500),
+      onFailure: (kind) => kinds.push(kind),
+    });
+
+    expect(kinds).toEqual(["http"]);
+  });
+
+  it("reports any other error as a network failure", async () => {
+    const kinds: string[] = [];
+    await inspectPayloadWithLaya("oi", "http://laya", undefined, {
+      fetchImpl: async () => {
+        throw new TypeError("fetch failed");
+      },
+      onFailure: (kind) => kinds.push(kind),
+    });
+
+    expect(kinds).toEqual(["network"]);
+  });
 });

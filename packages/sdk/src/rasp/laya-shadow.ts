@@ -26,6 +26,29 @@ export function createLayaGate(maxInFlight: number): LayaGate {
   };
 }
 
+/**
+ * Cobertura do modo sombra (R8). Um corpo sem texto não entra em nenhum
+ * contador; scheduled = dropped + inspected + failed depois que tudo termina.
+ */
+export interface LayaShadowCounters {
+  /** Texto extraído e entregue ao gate. */
+  scheduled: number;
+  /** O gate estava cheio: o texto não foi inspecionado. */
+  dropped: number;
+  /** O sidecar respondeu. */
+  inspected: number;
+  /** Falha de transporte (resultado null), incluindo timeouts. */
+  failed: number;
+  /** Subconjunto de failed: o sidecar não respondeu dentro do prazo. */
+  timedOut: number;
+  /** Subconjunto de inspected: virou evento. */
+  flagged: number;
+}
+
+export function createLayaShadowCounters(): LayaShadowCounters {
+  return { scheduled: 0, dropped: 0, inspected: 0, failed: 0, timedOut: 0, flagged: 0 };
+}
+
 export interface LayaShadowJob {
   method: string;
   body: unknown;
@@ -40,6 +63,7 @@ export interface LayaShadowJob {
   /** Checkpoint forçado (R7); sem ele o sidecar escolhe pelo idioma. */
   model?: string;
   gate: LayaGate;
+  counters?: LayaShadowCounters;
   inspect?: typeof inspectPayloadWithLaya;
   enqueue: (event: RaspEvent) => void;
   flush: () => Promise<void>;
@@ -97,11 +121,27 @@ function toEvent(job: LayaShadowJob, result: LayaInspectionResult): RaspEvent {
 }
 
 async function inspectInBackground(job: LayaShadowJob, text: string): Promise<void> {
-  if (!job.gate.tryAcquire()) return;
+  const counters = job.counters;
+  if (counters) counters.scheduled += 1;
+  if (!job.gate.tryAcquire()) {
+    if (counters) counters.dropped += 1;
+    return;
+  }
   try {
     const inspect = job.inspect ?? inspectPayloadWithLaya;
-    const result = await inspect(text, job.layaUrl, job.apiKey, job.model ? { model: job.model } : undefined);
-    if (!result?.flagged || !result.threatType) return;
+    const result = await inspect(text, job.layaUrl, job.apiKey, {
+      ...(job.model ? { model: job.model } : {}),
+      onFailure: (kind) => {
+        if (counters && kind === "timeout") counters.timedOut += 1;
+      },
+    });
+    if (!result) {
+      if (counters) counters.failed += 1;
+      return;
+    }
+    if (counters) counters.inspected += 1;
+    if (!result.flagged || !result.threatType) return;
+    if (counters) counters.flagged += 1;
     job.enqueue(toEvent(job, result));
     await job.flush();
   } finally {

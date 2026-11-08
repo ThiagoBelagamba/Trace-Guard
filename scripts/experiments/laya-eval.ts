@@ -31,13 +31,14 @@ import {
   LAYA_NOUL_THRESHOLD,
   type LayaInspectionResult,
 } from "../../packages/sdk/src/rasp/laya-inspector.ts";
-import { extractInspectableText } from "../../packages/sdk/src/rasp/laya-shadow.ts";
+import { extractInspectableText, type LayaShadowCounters } from "../../packages/sdk/src/rasp/laya-shadow.ts";
 import { LAYA_DATASET, type LayaCase } from "./laya-dataset.ts";
 import { checkDatasetIntegrity, loadLayaDatasetFile } from "./laya-dataset-loader.ts";
 import {
   brierScore,
   buildAccuracyReport,
   calibrationPairs,
+  diffShadowStats,
   expectedCalibrationError,
   formatNoul,
   majorityVerdict,
@@ -461,10 +462,35 @@ function postChat(
   });
 }
 
-async function measureHotPath(): Promise<number[]> {
+/**
+ * Contadores do sombra (R8) lidos do /health da demo-api, depois que as
+ * inspeções em voo terminam (scheduled = dropped + inspected + failed).
+ */
+async function readShadowStats(): Promise<LayaShadowCounters> {
+  const deadline = Date.now() + 15_000;
+  for (;;) {
+    const res = await fetch(`http://localhost:${DEMO_PORT}/health`);
+    const body = (await res.json()) as { laya?: LayaShadowCounters | null };
+    const stats = body.laya;
+    if (!stats) {
+      throw new Error("o /health da demo-api não traz os contadores do Laya. Rode pnpm build (a demo-api usa o dist do SDK).");
+    }
+    if (stats.scheduled === stats.dropped + stats.inspected + stats.failed || Date.now() > deadline) return stats;
+    await sleep(100);
+  }
+}
+
+function printCoverage(label: string, c: LayaShadowCounters, sent: number): void {
+  console.log(
+    `${label}: inspecionadas ${c.inspected} de ${sent} · descartadas pelo gate ${c.dropped} · falhas ${c.failed} (timeout ${c.timedOut})`
+  );
+}
+
+async function measureHotPath(afterWarmup?: () => Promise<void>): Promise<number[]> {
   for (let i = 0; i < DEMO_WARMUP; i++) {
     await postChat(DATASET[i % DATASET.length]!.text);
   }
+  await afterWarmup?.();
   const samples: number[] = [];
   for (const item of DATASET) {
     for (let rep = 0; rep < HOT_PATH_REPS; rep++) {
@@ -483,7 +509,8 @@ function printHotPath(
   burst: LatencySummary,
   paced: LatencySummary,
   pacedCount: number,
-  pacingMs: number
+  pacingMs: number,
+  coverage: { burst: LayaShadowCounters; paced: LayaShadowCounters }
 ): void {
   console.log("\n### 4.3 Custo no caminho quente\n");
   console.log(`demo-api em :${DEMO_PORT}, RASP_MODE=monitor\n`);
@@ -497,6 +524,10 @@ function printHotPath(
   console.log(
     `\nDiferença ritmado − sem: p50 ${signed(paced.p50 - without.p50)} ms · p95 ${signed(paced.p95 - without.p95)} ms`
   );
+  console.log("\nCobertura do sombra (contadores do SDK, /health da demo-api):\n");
+  printCoverage("Rajada", coverage.burst, DATASET.length * HOT_PATH_REPS);
+  console.log("");
+  printCoverage("Ritmado", coverage.paced, pacedCount);
   console.log(
     `\nA linha ritmada é o custo por requisição inspecionada: um envio a cada ${pacingMs} ms (p95 do modelo), então cada corpo chega ao sidecar enquanto a resposta já saiu. ` +
       "Na rajada, as requisições chegam a cada ~1 ms e o SDK descarta as que encontram as 4 vagas ocupadas: a maioria não é inspecionada. " +
@@ -611,16 +642,22 @@ async function main(): Promise<void> {
 
   const withDemo = await startDemoApi(true);
   try {
-    const burstSamples = await measureHotPath();
+    let burstStart: LayaShadowCounters | undefined;
+    const burstSamples = await measureHotPath(async () => {
+      burstStart = await readShadowStats();
+    });
     // A rajada deixa inspeções em voo; espera a fila esvaziar antes de medir a entrega.
     await sleep(pacingMs * 4);
+    const burstEnd = await readShadowStats();
     const { report, pacedSamples } = await runIntegrationStage(verdicts, pacingMs);
+    const pacedEnd = await readShadowStats();
     printHotPath(
       summarizeLatency(withoutSamples),
       summarizeLatency(burstSamples),
       summarizeLatency(pacedSamples),
       pacedSamples.length,
-      pacingMs
+      pacingMs,
+      { burst: diffShadowStats(burstStart!, burstEnd), paced: diffShadowStats(burstEnd, pacedEnd) }
     );
     printIntegration(report, pacingMs);
   } finally {

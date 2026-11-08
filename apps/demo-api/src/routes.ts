@@ -1,3 +1,4 @@
+import { getLayaShadowStats } from "@traceguard/sdk";
 import { Router, type IRouter } from "express";
 
 const products = Array.from({ length: 50 }, (_, i) => ({
@@ -10,7 +11,11 @@ const products = Array.from({ length: 50 }, (_, i) => ({
 export const routes: IRouter = Router();
 
 routes.get("/health", (_req, res) => {
-  res.json({ status: "ok", service: "demo-api" });
+  res.json({
+    status: "ok",
+    service: "demo-api",
+    ...(process.env.LAYA_SIDECAR_URL?.trim() ? { laya: getLayaShadowStats() } : {}),
+  });
 });
 
 routes.get("/api/products/:id", (req, res) => {
