@@ -1,4 +1,10 @@
-export const LAYA_NOUL_THRESHOLD = 0.8;
+/**
+ * Limiar de positividade. Com as perguntas do preset, as notas se concentram
+ * perto de 0 ou de 1 e 0,85 cortou um FP sem perder recall (relatório §7.3).
+ */
+export const LAYA_NOUL_THRESHOLD = 0.85;
+/** Gate de certeza enviado como min_confidence; separado do limiar (§8.5). */
+export const LAYA_MIN_CONFIDENCE = 0.8;
 export const LAYA_TIMEOUT_MS = 8_000;
 
 export type LayaQuestionId = "jailbreak" | "prompt_injection" | "sensitive_data";
@@ -85,6 +91,16 @@ function stronger(primary?: LayaSignal, other?: LayaSignal): LayaSignal | undefi
   return other.noul > primary.noul ? other : primary;
 }
 
+/**
+ * Credencial vence: a pergunta de injeção dispara junto em 9 de 10
+ * credenciais, e "maior nota vence" rotulava 8 de 20 detecções errado (§7.1).
+ */
+export function pickThreatType(piHit: boolean, slHit: boolean): SemanticThreat | undefined {
+  if (slHit) return "secret_leak";
+  if (piHit) return "prompt_injection";
+  return undefined;
+}
+
 export function isHit(signal: LayaSignal | undefined): signal is LayaSignal {
   return (
     signal !== undefined &&
@@ -117,7 +133,7 @@ export async function inspectPayloadWithLaya(
       },
       body: JSON.stringify({
         state: { prompt: payloadText },
-        min_confidence: LAYA_NOUL_THRESHOLD,
+        min_confidence: LAYA_MIN_CONFIDENCE,
         questions: GUARD_QUESTIONS,
       }),
       signal: AbortSignal.timeout(options?.timeoutMs ?? LAYA_TIMEOUT_MS),
@@ -139,13 +155,12 @@ export async function inspectPayloadWithLaya(
     if (prompt) signals.prompt_injection = prompt;
     if (secret) signals.secret_leak = secret;
 
+    const piHit = isHit(prompt);
+    const slHit = isHit(secret);
+    const threatType = pickThreatType(piHit, slHit);
     const hits: SemanticThreat[] = [];
-    if (isHit(prompt)) hits.push("prompt_injection");
-    if (isHit(secret)) hits.push("secret_leak");
-
-    const threatType = hits.sort(
-      (left, right) => (signals[right]?.noul ?? 0) - (signals[left]?.noul ?? 0)
-    )[0];
+    if (threatType) hits.push(threatType);
+    if (piHit && threatType !== "prompt_injection") hits.push("prompt_injection");
 
     const latencyMs = Math.round(now() - started);
     if (!threatType) {

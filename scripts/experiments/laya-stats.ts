@@ -9,6 +9,7 @@ import {
 import type { RaspEvent } from "../../packages/shared/src/rasp.ts";
 import {
   isHit,
+  pickThreatType,
   type LayaInspectionResult,
 } from "../../packages/sdk/src/rasp/laya-inspector.ts";
 import type { LayaCase } from "./laya-dataset.ts";
@@ -72,10 +73,7 @@ export function majorityVerdict(runs: (LayaInspectionResult | null)[]): CaseVerd
   const piNoul = median(valid.flatMap((r) => (r.signals.prompt_injection ? [r.signals.prompt_injection.noul] : [])));
   const slNoul = median(valid.flatMap((r) => (r.signals.secret_leak ? [r.signals.secret_leak.noul] : [])));
 
-  const hits: { type: SemanticThreat; noul: number }[] = [];
-  if (piHit) hits.push({ type: "prompt_injection", noul: piNoul ?? 0 });
-  if (slHit) hits.push({ type: "secret_leak", noul: slNoul ?? 0 });
-  hits.sort((a, b) => b.noul - a.noul);
+  const threatType = pickThreatType(piHit, slHit);
 
   const verdict: CaseVerdict = {
     flagged,
@@ -89,7 +87,7 @@ export function majorityVerdict(runs: (LayaInspectionResult | null)[]): CaseVerd
     totalRuns: runs.length,
     stable: flaggedCount === 0 || flaggedCount === valid.length,
   };
-  if (hits[0]) verdict.threatType = hits[0].type;
+  if (threatType) verdict.threatType = threatType;
   return verdict;
 }
 

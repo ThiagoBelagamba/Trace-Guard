@@ -16,7 +16,7 @@ import {
 function run(pi: number, sl: number, abstained = false): LayaInspectionResult {
   const abstention = abstained ? "abstained" : undefined;
   return {
-    flagged: pi >= 0.8 || sl >= 0.8,
+    flagged: pi >= 0.85 || sl >= 0.85,
     score: 0,
     reasons: [],
     modelUsed: "multilingual",
@@ -103,9 +103,14 @@ describe("majorityVerdict", () => {
     expect(result?.piHit).toBe(false);
   });
 
-  it("picks the threat type with the higher median noul", () => {
+  it("names secret_leak when both signals hit, even with the higher prompt injection", () => {
+    const result = majorityVerdict([run(0.99, 0.9), run(0.99, 0.9), run(0.99, 0.9)]);
+    expect(result).toMatchObject({ piHit: true, slHit: true, threatType: "secret_leak" });
+  });
+
+  it("does not count 0.82 as a hit under the 0.85 threshold", () => {
     const result = majorityVerdict([run(0.82, 0.97), run(0.82, 0.97), run(0.82, 0.97)]);
-    expect(result?.threatType).toBe("secret_leak");
+    expect(result).toMatchObject({ piHit: false, slHit: true, threatType: "secret_leak" });
   });
 });
 

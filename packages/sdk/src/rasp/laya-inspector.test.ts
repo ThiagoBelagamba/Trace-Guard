@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { inspectPayloadWithLaya } from "./laya-inspector.js";
+import { inspectPayloadWithLaya, pickThreatType } from "./laya-inspector.js";
 
 function jsonResponse(body: unknown, status = 200): Response {
   return new Response(JSON.stringify(body), {
@@ -152,6 +152,42 @@ describe("inspectPayloadWithLaya", () => {
     expect(result?.flagged).toBe(true);
     expect(result?.threatType).toBe("secret_leak");
     expect(result?.score).toBe(96);
+  });
+
+  it("flags at 0.85 but not at 0.84", async () => {
+    const below = await inspectPayloadWithLaya("x", "http://laya", undefined, {
+      fetchImpl: answering({ prompt_injection: { noul: 0.84 }, sensitive_data: { noul: 0.1 } }),
+    });
+    const at = await inspectPayloadWithLaya("x", "http://laya", undefined, {
+      fetchImpl: answering({ prompt_injection: { noul: 0.85 }, sensitive_data: { noul: 0.1 } }),
+    });
+
+    expect(below?.flagged).toBe(false);
+    expect(at?.flagged).toBe(true);
+  });
+
+  it("prefers secret_leak over a stronger prompt injection and keeps both reasons", async () => {
+    const result = await inspectPayloadWithLaya("paste this key", "http://laya", undefined, {
+      fetchImpl: answering({
+        jailbreak: { noul: 0.2 },
+        prompt_injection: { noul: 1 },
+        sensitive_data: { noul: 0.9 },
+      }),
+    });
+
+    expect(result?.threatType).toBe("secret_leak");
+    expect(result?.score).toBe(90);
+    expect(result?.reasons).toEqual([
+      "secret_leak via sensitive_data (p=0.90)",
+      "prompt_injection via prompt_injection (p=1.00)",
+    ]);
+  });
+
+  it("picks the threat type with secret_leak first", () => {
+    expect(pickThreatType(true, true)).toBe("secret_leak");
+    expect(pickThreatType(true, false)).toBe("prompt_injection");
+    expect(pickThreatType(false, true)).toBe("secret_leak");
+    expect(pickThreatType(false, false)).toBeUndefined();
   });
 
   it("returns null when the sidecar answers with an error", async () => {
