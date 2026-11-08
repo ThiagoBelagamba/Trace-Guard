@@ -90,11 +90,19 @@ function collectStrings(value: unknown, depth: number, out: string[]): void {
  * imprevisível (relatório do Experimento 4, §6.2).
  */
 export function extractInspectableText(body: unknown): string | null {
+  return capForLaya(extractBodyText(body));
+}
+
+/** Todo o texto do corpo, sem o teto do sidecar; null quando não há texto. */
+function extractBodyText(body: unknown): string | null {
   const parts: string[] = [];
   collectStrings(body, 0, parts);
   const text = parts.join("\n");
-  if (!text || text.length > LAYA_MAX_PAYLOAD_CHARS) return null;
-  return text;
+  return text || null;
+}
+
+function capForLaya(text: string | null): string | null {
+  return text && text.length <= LAYA_MAX_PAYLOAD_CHARS ? text : null;
 }
 
 function toEvent(job: LayaShadowJob, result: LayaInspectionResult): RaspEvent {
@@ -178,14 +186,16 @@ export function scheduleLayaInspection(job: LayaShadowJob): void {
   if (job.body === undefined || job.body === null) return;
 
   setImmediate(() => {
-    const text = extractInspectableText(job.body);
-    if (!text) return;
+    const fullText = extractBodyText(job.body);
+    if (!fullText) return;
     // Antes do gate: a regex é síncrona e barata, então sobrevive a rajadas (ADR 010).
-    const patterns = detectSecretPatterns(text);
+    // Lê o corpo inteiro: um log longo com uma chave colada passa do teto do sidecar.
+    const patterns = detectSecretPatterns(fullText);
     if (patterns.length > 0) {
       job.enqueue(toPatternEvent(job, patterns));
       void job.flush().catch(() => {});
     }
-    void inspectInBackground(job, text);
+    const text = capForLaya(fullText);
+    if (text) void inspectInBackground(job, text);
   });
 }

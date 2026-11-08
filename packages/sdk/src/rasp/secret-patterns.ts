@@ -11,7 +11,10 @@ export type SecretPatternName = "aws_access_key" | "github_token" | "url_credent
 const SECRET_PATTERNS: readonly (readonly [SecretPatternName, RegExp])[] = [
   ["aws_access_key", /\b(?:AKIA|ASIA)[A-Z0-9]{16}\b/],
   ["github_token", /\bgh[pousr]_[A-Za-z0-9]{36,}\b/],
-  ["url_credentials", /[a-z][a-z0-9+.-]*:\/\/[^\s:@/]+:[^\s@/]+@/i],
+  // Esquema ancorado no início da palavra e partes limitadas: sem isso, um
+  // corpo de 8 KB montado de propósito leva ~50 ms (a busca é quadrática)
+  // e trava o event loop.
+  ["url_credentials", /(?<![a-z0-9+.-])[a-z][a-z0-9+.-]{0,31}:\/\/[^\s:@/]{1,256}:[^\s@/]{1,256}@/i],
   ["private_key_block", /-----BEGIN [A-Z ]*PRIVATE KEY-----/],
 ];
 

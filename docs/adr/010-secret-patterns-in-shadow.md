@@ -21,10 +21,12 @@ Rodar quatro regex síncronas sobre o mesmo texto que vai ao Laya (`packages/sdk
 |---|---|
 | `aws_access_key` | `\b(?:AKIA\|ASIA)[A-Z0-9]{16}\b` |
 | `github_token` | `\bgh[pousr]_[A-Za-z0-9]{36,}\b` |
-| `url_credentials` | `[a-z][a-z0-9+.-]*://[^\s:@/]+:[^\s@/]+@` (sem diferenciar maiúsculas) |
+| `url_credentials` | `(?<![a-z0-9+.-])[a-z][a-z0-9+.-]{0,31}://[^\s:@/]{1,256}:[^\s@/]{1,256}@` (sem diferenciar maiúsculas) |
 | `private_key_block` | `-----BEGIN [A-Z ]*PRIVATE KEY-----` |
 
 - **Onde:** no `setImmediate` do sombra, depois da extração do texto e **antes** do gate. A regex não ocupa vaga e sobrevive a rajadas.
+- **Tempo linear:** o esquema é ancorado no início da palavra e as partes têm tamanho máximo. A primeira versão (`[a-z][a-z0-9+.-]*://…`) era quadrática: um corpo de 8 KB montado de propósito levava ~50 ms no event loop. Toda regex nova precisa de um teste de tempo com entrada adversária.
+- **Corpo inteiro:** os padrões leem todo o texto do corpo; o teto de 8.000 caracteres vale só para o envio ao Laya. Um log longo com uma chave colada é o caso típico de vazamento.
 - **Evento:** `threatType: "secret_leak"`, `action: "logged"`, `score: 100` e `metadata: { source: "pattern", patterns: [...] }`.
 - **Sem o segredo:** o evento leva só os nomes dos padrões, nunca o trecho casado. O evento vai para o PostgreSQL e para o dashboard, e gravar a credencial ali criaria um segundo vazamento.
 - **Laya continua:** a inspeção do modelo segue normalmente depois do padrão. Ela pode achar o que a regex não cobre, como um `Bearer` genérico ou uma senha em prosa.

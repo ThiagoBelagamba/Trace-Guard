@@ -283,3 +283,16 @@ describe("credential patterns in the shadow", () => {
     expect(events).toEqual([]);
   });
 });
+
+describe("credential patterns on long bodies", () => {
+  it("finds a credential in a body too long for the sidecar", async () => {
+    const body = { log: "x ".repeat(LAYA_MAX_PAYLOAD_CHARS) + "postgres://admin:SenhaForte@db:5432/x" };
+    const { events, calls } = job({ body });
+
+    await settle();
+
+    expect(calls).toEqual([]);
+    expect(events).toHaveLength(1);
+    expect(events[0]?.metadata).toEqual({ source: "pattern", patterns: ["url_credentials"] });
+  });
+});

@@ -34,4 +34,18 @@ describe("detectSecretPatterns", () => {
     const text = `-----BEGIN PRIVATE KEY----- ${AWS}IOSFODNN7EXAMPLE ${AWS}I44QH8DHBEXAMPLE`;
     expect(detectSecretPatterns(text)).toEqual(["aws_access_key", "private_key_block"]);
   });
+
+  it("stays linear on adversarial URL-like input", () => {
+    const inputs = [
+      "a".repeat(100_000) + "://",
+      "a".repeat(50_000) + "://b:" + "c".repeat(50_000),
+      "a:".repeat(50_000),
+    ];
+    for (const text of inputs) {
+      const started = performance.now();
+      detectSecretPatterns(text);
+      expect(performance.now() - started).toBeLessThan(200);
+    }
+  });
 });
+
