@@ -17,10 +17,12 @@
  * e backend (pnpm dev:backend).
  *
  * Uso: pnpm experiment:laya
+ *      LAYA_CONFIG=Cnn pnpm run experiment:laya  (configuração registrada; ver
+ *      docs/tcc/experimento-4-registro/README.md)
  */
 import { spawn, type ChildProcess } from "node:child_process";
 import { randomBytes } from "node:crypto";
-import { existsSync } from "node:fs";
+import { existsSync, mkdirSync, writeFileSync } from "node:fs";
 import http from "node:http";
 import net from "node:net";
 import path from "node:path";
@@ -30,6 +32,7 @@ import {
   inspectPayloadWithLaya,
   LAYA_NOUL_THRESHOLD,
   type LayaInspectionResult,
+  type LayaThresholds,
 } from "../../packages/sdk/src/rasp/laya-inspector.ts";
 import { extractInspectableText, type LayaShadowCounters } from "../../packages/sdk/src/rasp/laya-shadow.ts";
 import { detectSecretPatterns } from "../../packages/sdk/src/rasp/secret-patterns.ts";
@@ -56,11 +59,27 @@ import {
   type VerdictPolicy,
 } from "./laya-stats.ts";
 import { BASELINE_POLICY, inspectBaseline } from "./laya-baseline.ts";
+import { configPath, REGISTRY_DIR, type DatasetName, type LayaResult } from "./laya-registry.ts";
+import {
+  assertCommitted,
+  configCommit,
+  metricsFromReport,
+  modelFor,
+  resolveRunPlan,
+  sdkPolicy,
+  TEST_FILE,
+  type RunPlan,
+} from "./laya-run-config.ts";
 
 const LAYA_URL = (process.env.LAYA_SIDECAR_URL ?? "http://localhost:8000").replace(/\/$/, "");
 const LAYA_API_KEY = process.env.LAYA_API_KEY ?? "traceguard-secret";
 /** Checkpoint forçado (R7); vale para a variante sdk e para a demo-api filha. */
 const LAYA_MODEL = process.env.LAYA_MODEL?.trim() || undefined;
+/** Parâmetros ativos: das variáveis avulsas, ou do JSON quando há LAYA_CONFIG (main). */
+let activeModel: string | undefined = LAYA_MODEL;
+let activeThresholds: LayaThresholds | undefined;
+let activeMinConfidence: number | undefined;
+let runPlan: RunPlan | null = null;
 const API_URL = (process.env.API_URL ?? "http://localhost:3001").replace(/\/$/, "");
 const API_KEY = process.env.API_KEY;
 const DEMO_PORT = parseInt(process.env.EXPERIMENT_DEMO_PORT ?? "4100", 10);
@@ -68,26 +87,39 @@ const DEMO_PORT = parseInt(process.env.EXPERIMENT_DEMO_PORT ?? "4100", 10);
 const REPS = Math.max(1, parseInt(process.env.LAYA_REPS ?? "1", 10) || 1);
 /** O caminho quente mede tempo de resposta, que varia: mantém 3 amostras por texto. */
 const HOT_PATH_REPS = 3;
-const DATASET_NAME = process.env.LAYA_DATASET ?? "dev";
+let datasetName: string = process.env.LAYA_DATASET ?? "dev";
 const VALIDATION_FILE = path.join("scripts", "experiments", "data", "laya-validation.json");
-const STAGES = process.env.LAYA_STAGES ?? "all";
+let stages = process.env.LAYA_STAGES ?? "all";
 /** GET /api/v1/rasp/events devolve no máximo 100 eventos. */
 const MAX_INTEGRATION_TEXTS = 100;
 let DATASET: readonly LayaCase[] = LAYA_DATASET;
 
-/** dev = os 40 textos do relatório; validation = o JSON independente (R9), conferido antes de usar. */
+/**
+ * dev = os 40 textos do relatório; validation = o JSON independente (R9);
+ * test = o terceiro conjunto (registro), disjunto dos dois anteriores.
+ */
 function resolveDataset(): readonly LayaCase[] {
-  if (DATASET_NAME === "dev") return LAYA_DATASET;
-  if (DATASET_NAME !== "validation") {
-    throw new Error(`LAYA_DATASET=${DATASET_NAME} desconhecido. Use dev ou validation.`);
+  if (datasetName === "dev") return LAYA_DATASET;
+  if (datasetName !== "validation" && datasetName !== "test") {
+    throw new Error(`LAYA_DATASET=${datasetName} desconhecido. Use dev, validation ou test.`);
   }
-  if (!existsSync(VALIDATION_FILE)) {
-    throw new Error(`${VALIDATION_FILE} não encontrado. Veja scripts/experiments/data/README.md.`);
+  const validation = loadChecked(VALIDATION_FILE, "validação", { minPerClass: 100, disjointFrom: LAYA_DATASET });
+  if (datasetName === "validation") return validation;
+  return loadChecked(TEST_FILE, "teste", {
+    minPerClass: 90,
+    minHardBenign: 100,
+    disjointFrom: [...LAYA_DATASET, ...validation],
+  });
+}
+
+function loadChecked(file: string, label: string, opts: Parameters<typeof checkDatasetIntegrity>[1]): LayaCase[] {
+  if (!existsSync(file)) {
+    throw new Error(`${file} não encontrado. Veja scripts/experiments/data/README.md.`);
   }
-  const cases = loadLayaDatasetFile(VALIDATION_FILE);
-  const problems = checkDatasetIntegrity(cases, { minPerClass: 100, disjointFrom: LAYA_DATASET });
+  const cases = loadLayaDatasetFile(file);
+  const problems = checkDatasetIntegrity(cases, opts);
   if (problems.length > 0) {
-    throw new Error(`conjunto de validação recusado:\n- ${problems.join("\n- ")}`);
+    throw new Error(`conjunto de ${label} recusado:\n- ${problems.join("\n- ")}`);
   }
   return cases;
 }
@@ -115,7 +147,11 @@ function payloadFor(text: string): string {
 }
 
 function inspect(text: string): Promise<LayaInspectionResult | null> {
-  return inspectPayloadWithLaya(payloadFor(text), LAYA_URL, LAYA_API_KEY, LAYA_MODEL ? { model: LAYA_MODEL } : undefined);
+  return inspectPayloadWithLaya(payloadFor(text), LAYA_URL, LAYA_API_KEY, {
+    ...(activeModel ? { model: activeModel } : {}),
+    ...(activeThresholds ? { thresholds: activeThresholds } : {}),
+    ...(activeMinConfidence !== undefined ? { minConfidence: activeMinConfidence } : {}),
+  });
 }
 
 /**
@@ -128,8 +164,10 @@ const WARMUP_TEXTS = [
   "Olá, qual o prazo de entrega para São Paulo?",
   "Hi, when will my order be shipped?",
 ];
-/** Com LAYA_MODEL, o sidecar só usa aquele checkpoint; sem ele, os dois do roteamento. */
-const REQUIRED_CHECKPOINTS: readonly string[] = LAYA_MODEL ? [LAYA_MODEL] : ["multilingual", "english"];
+/** Com checkpoint forçado, o sidecar só usa aquele; sem ele, os dois do roteamento. */
+function requiredCheckpoints(): readonly string[] {
+  return activeModel ? [activeModel] : ["multilingual", "english"];
+}
 const WARMUP_DEADLINE_MS = 180_000;
 const WARMUP_CALL_TIMEOUT_MS = 30_000;
 
@@ -141,12 +179,12 @@ async function warmUpSidecar(): Promise<{ elapsedMs: number; seen: string[] }> {
     const text = payloadFor(WARMUP_TEXTS[i % WARMUP_TEXTS.length]!);
     const result = await inspectPayloadWithLaya(text, LAYA_URL, LAYA_API_KEY, {
       timeoutMs: WARMUP_CALL_TIMEOUT_MS,
-      ...(LAYA_MODEL ? { model: LAYA_MODEL } : {}),
+      ...(activeModel ? { model: activeModel } : {}),
     });
     if (result) {
       valid += 1;
       seen.add(result.modelUsed);
-      if (pendingCheckpoints(seen, REQUIRED_CHECKPOINTS).length === 0) {
+      if (pendingCheckpoints(seen, requiredCheckpoints()).length === 0) {
         return { elapsedMs: Date.now() - started, seen: [...seen] };
       }
     }
@@ -156,7 +194,7 @@ async function warmUpSidecar(): Promise<{ elapsedMs: number; seen: string[] }> {
       "sidecar respondeu /health mas /v1/systemone falhou — confira LAYA_API_KEY"
     );
   }
-  const pending = pendingCheckpoints(seen, REQUIRED_CHECKPOINTS);
+  const pending = pendingCheckpoints(seen, requiredCheckpoints());
   throw new Error(
     `aquecimento: sem resposta do(s) checkpoint(s) ${pending.join(", ")} em ${WARMUP_DEADLINE_MS / 1000} s. ` +
       "Confira LAYA_MODELS=multilingual,english e o log do sidecar."
@@ -607,12 +645,72 @@ function printIntegration(report: DeliveryReport, pacingMs: number): void {
   );
 }
 
+/** Aplica o JSON da configuração; no conjunto de teste, exige o commit de pré-registro. */
+function applyRunPlan(plan: RunPlan): string | null {
+  const { config } = plan;
+  activeModel = modelFor(config);
+  activeThresholds = config.limiares;
+  activeMinConfidence = config.min_confidence;
+  datasetName = plan.dataset;
+  stages = "accuracy";
+  const file = configPath(config.id);
+  return plan.dataset === "test" ? assertCommitted(file) : configCommit(file);
+}
+
+/** A variante do JSON, com o mesmo rótulo de seção que a re-pontuação lê. */
+function planVariant(plan: RunPlan): Variant {
+  const base = ALL_VARIANTS.find((v) => v.id === plan.config.variante)!;
+  return plan.config.variante === "sdk" ? { ...base, policy: sdkPolicy(plan.config.limiares) } : base;
+}
+
+/** Repete console.log num buffer, para gravar a saída bruta no registro. */
+function captureOutput(): () => string {
+  const lines: string[] = [];
+  const original = console.log.bind(console);
+  console.log = (...args: unknown[]) => {
+    lines.push(args.map(String).join(" "));
+    original(...args);
+  };
+  return () => `${lines.join("\n")}\n`;
+}
+
+function writeRegistryRun(plan: RunPlan, commit: string | null, run: AccuracyRun, output: string): void {
+  const stem = `${plan.config.id}--${plan.dataset}`;
+  const saida = path.posix.join("saidas", `${stem}.md`);
+  const result: LayaResult = {
+    config: plan.config.id,
+    conjunto: plan.dataset as DatasetName,
+    data: new Date().toISOString().slice(0, 10),
+    commit_config: commit,
+    origem: "execucao",
+    saida,
+    metricas: metricsFromReport(run.report, run.modelLatency),
+  };
+  mkdirSync(path.join(REGISTRY_DIR, "saidas"), { recursive: true });
+  mkdirSync(path.join(REGISTRY_DIR, "resultados"), { recursive: true });
+  writeFileSync(path.join(REGISTRY_DIR, saida), output, "utf8");
+  writeFileSync(path.join(REGISTRY_DIR, "resultados", `${stem}.json`), `${JSON.stringify(result, null, 2)}\n`, "utf8");
+  console.error(`[experiment:laya] registro: ${saida} e resultados/${stem}.json gravados`);
+}
+
+function thresholdLabel(): string {
+  const t = activeThresholds;
+  return t
+    ? `PI ≥ ${t.prompt_injection} · SL ≥ ${t.secret_leak}`
+    : `limiar noul ≥ ${LAYA_NOUL_THRESHOLD.toFixed(2)}`;
+}
+
 async function main(): Promise<void> {
+  runPlan = resolveRunPlan(process.env);
+  // Antes de qualquer chamada ao sidecar: a prova do pré-registro vem primeiro.
+  const commit = runPlan ? applyRunPlan(runPlan) : null;
+  const capturedOutput = runPlan ? captureOutput() : null;
+
   DATASET = resolveDataset();
-  if (STAGES !== "all" && STAGES !== "accuracy") {
-    throw new Error(`LAYA_STAGES=${STAGES} desconhecido. Use all ou accuracy.`);
+  if (stages !== "all" && stages !== "accuracy") {
+    throw new Error(`LAYA_STAGES=${stages} desconhecido. Use all ou accuracy.`);
   }
-  if (STAGES === "all" && DATASET.length > MAX_INTEGRATION_TEXTS) {
+  if (stages === "all" && DATASET.length > MAX_INTEGRATION_TEXTS) {
     throw new Error(
       `a integração (4.4) confere no máximo ${MAX_INTEGRATION_TEXTS} textos e o conjunto tem ${DATASET.length}. ` +
         "Rode com LAYA_STAGES=accuracy."
@@ -623,20 +721,36 @@ async function main(): Promise<void> {
     "Suba o sidecar com: docker compose --profile laya up -d --build laya"
   );
   // Só a 4.4 lê eventos do backend; a acurácia fala apenas com o sidecar.
-  if (STAGES === "all") {
+  if (stages === "all") {
     await assertReachable(`${API_URL}/health`, "Suba o backend com: pnpm dev:backend");
   }
   const warmup = await warmUpSidecar();
 
   console.log("## Experimento 4 — Laya (sidecar em modo sombra)\n");
+  if (runPlan) {
+    const c = runPlan.config;
+    console.log(`Configuração: ${c.id} — ${c.titulo} · status: ${c.status} · commit: ${commit ?? "não commitado"}`);
+  }
   console.log(`Sidecar: ${LAYA_URL}`);
   console.log(
     `Aquecimento: ${(warmup.elapsedMs / 1000).toFixed(1)} s · checkpoints: ${warmup.seen.join(", ")}`
   );
-  console.log(`Backend: ${API_URL} · checkpoint: ${LAYA_MODEL ?? "roteamento por idioma"}`);
+  console.log(`Backend: ${API_URL} · checkpoint: ${activeModel ?? "roteamento por idioma"}`);
   console.log(
-    `Conjunto: ${DATASET_NAME} · casos: ${DATASET.length} · repetições por caso: ${REPS} · limiar noul ≥ ${LAYA_NOUL_THRESHOLD.toFixed(2)} · etapas: ${STAGES}\n`
+    `Conjunto: ${datasetName} · casos: ${DATASET.length} · repetições por caso: ${REPS} · ${thresholdLabel()} · etapas: ${stages}\n`
   );
+
+  if (runPlan) {
+    const run = await runAccuracyStage(planVariant(runPlan));
+    printAccuracy(run);
+    let recorded = run;
+    if (runPlan.config.padroes_credencial) {
+      recorded = withPatternsRun(run);
+      printComparison([run, recorded]);
+    }
+    writeRegistryRun(runPlan, commit, recorded, capturedOutput!());
+    return;
+  }
 
   const runs: AccuracyRun[] = [];
   for (const variant of selectedVariants()) {
@@ -647,7 +761,7 @@ async function main(): Promise<void> {
   const sdkRun = runs.find((r) => r.variant.id === "sdk");
   printComparison(sdkRun ? [...runs, withPatternsRun(sdkRun)] : runs);
   const { verdicts, modelLatency } = runs[0]!;
-  if (STAGES === "accuracy") {
+  if (stages === "accuracy") {
     console.log("\nEtapas 4.3 e 4.4 puladas (LAYA_STAGES=accuracy).");
     return;
   }

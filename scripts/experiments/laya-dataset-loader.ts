@@ -54,6 +54,9 @@ export function loadLayaDatasetFile(file: string): LayaCase[] {
 
 export interface IntegrityOptions {
   minPerClass: number;
+  /** Mínimo absoluto de legítimos difíceis (conjunto de teste). */
+  minHardBenign?: number;
+  /** Conjuntos anteriores (desenvolvimento, validação) que não podem se repetir. */
   disjointFrom?: readonly LayaCase[];
 }
 
@@ -74,6 +77,9 @@ export function checkDatasetIntegrity(cases: readonly LayaCase[], opts: Integrit
   const hard = benign.filter((c) => c.hard).length;
   if (benign.length > 0 && hard / benign.length < MIN_HARD_BENIGN_SHARE) {
     problems.push(`legítimos difíceis: ${hard}/${benign.length}, mínimo ${MIN_HARD_BENIGN_SHARE * 100}%`);
+  }
+  if (opts.minHardBenign !== undefined && hard < opts.minHardBenign) {
+    problems.push(`legítimos difíceis: ${hard}, mínimo ${opts.minHardBenign}`);
   }
 
   const seen = new Set<string>();
@@ -99,8 +105,8 @@ export function checkDatasetIntegrity(cases: readonly LayaCase[], opts: Integrit
     const devIds = new Set(opts.disjointFrom.map((c) => c.id));
     const devTexts = new Set(opts.disjointFrom.map((c) => normalize(c.text)));
     for (const c of cases) {
-      if (devIds.has(c.id)) problems.push(`${c.id}: id já usado no conjunto de desenvolvimento`);
-      if (devTexts.has(normalize(c.text))) problems.push(`${c.id}: texto igual a um do conjunto de desenvolvimento`);
+      if (devIds.has(c.id)) problems.push(`${c.id}: id já usado num conjunto anterior (desenvolvimento ou validação)`);
+      if (devTexts.has(normalize(c.text))) problems.push(`${c.id}: texto igual a um de conjunto anterior (desenvolvimento ou validação)`);
     }
   }
 

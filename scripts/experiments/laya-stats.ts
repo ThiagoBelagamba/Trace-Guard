@@ -16,7 +16,7 @@ import {
 import type { LayaCase } from "./laya-dataset.ts";
 import type { LayaShadowCounters } from "../../packages/sdk/src/rasp/laya-shadow.ts";
 
-type SemanticThreat = "prompt_injection" | "secret_leak";
+export type SemanticThreat = "prompt_injection" | "secret_leak";
 
 export interface LatencySummary {
   avg: number;
@@ -61,7 +61,8 @@ function median(values: number[]): number | null {
 
 /** Regras de decisão de uma configuração: limiar (isHit) e escolha do tipo. */
 export interface VerdictPolicy {
-  isHit(signal: LayaSignal | undefined): boolean;
+  /** `question` diz de qual pergunta é o sinal, para limiares por pergunta. */
+  isHit(signal: LayaSignal | undefined, question?: SemanticThreat): boolean;
   pickThreatType(
     piHit: boolean,
     slHit: boolean,
@@ -72,7 +73,7 @@ export interface VerdictPolicy {
 
 /** As regras do SDK atual (limiar 0,85 e prioridade para secret_leak). */
 export const SDK_POLICY: VerdictPolicy = {
-  isHit,
+  isHit: (signal) => isHit(signal),
   pickThreatType: (piHit, slHit) => pickThreatType(piHit, slHit),
 };
 
@@ -86,8 +87,8 @@ export function majorityVerdict(
 
   const majority = (count: number) => count > valid.length / 2;
   const flaggedCount = valid.filter((r) => r.flagged).length;
-  const piHit = majority(valid.filter((r) => policy.isHit(r.signals.prompt_injection)).length);
-  const slHit = majority(valid.filter((r) => policy.isHit(r.signals.secret_leak)).length);
+  const piHit = majority(valid.filter((r) => policy.isHit(r.signals.prompt_injection, "prompt_injection")).length);
+  const slHit = majority(valid.filter((r) => policy.isHit(r.signals.secret_leak, "secret_leak")).length);
   const piAbstained = majority(valid.filter((r) => r.signals.prompt_injection?.abstention === "abstained").length);
   const slAbstained = majority(valid.filter((r) => r.signals.secret_leak?.abstention === "abstained").length);
   const flagged = majority(flaggedCount);

@@ -89,4 +89,17 @@ describe("checkDatasetIntegrity", () => {
     expect(problems).toMatch(/id repetido/);
     expect(problems).toMatch(/difíceis/);
   });
+
+  it("reports fewer hard benign cases than an absolute minimum", () => {
+    const problems = checkDatasetIntegrity(validSet(), { minPerClass: 100, minHardBenign: 100 }).join("\n");
+    expect(problems).toMatch(/legítimos difíceis: 50, mínimo 100/);
+  });
+
+  it("reports a text reused from any earlier set", () => {
+    const validation = [makeCase("benign", 999, { id: "val-bn-1", text: "texto já usado na validação" })];
+    const cases = validSet();
+    cases[0] = { ...cases[0]!, text: "Texto já usado na   validação" };
+    const problems = checkDatasetIntegrity(cases, { minPerClass: 100, disjointFrom: [...LAYA_DATASET, ...validation] });
+    expect(problems.join("\n")).toMatch(/conjunto anterior/);
+  });
 });
