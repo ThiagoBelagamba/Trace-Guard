@@ -161,6 +161,49 @@ curl -X POST http://localhost:3001/api/v1/mcp \
   -d '{"jsonrpc":"2.0","id":1,"method":"tools/call","params":{"name":"investigate_trace","arguments":{"traceId":"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"}}}'
 ```
 
+**Comportamento do transporte HTTP:**
+
+| Situação | Resposta |
+|---|---|
+| Requisição JSON-RPC (mensagem com `id`, inclusive `id: 0`) | `200` com o JSON da resposta |
+| Notificação (mensagem sem `id`, ex.: `notifications/initialized`) | `202` sem corpo |
+| Lote JSON-RPC (array) | `200` com erro `-32600` |
+| `GET /api/v1/mcp` | `405` com header `Allow: POST` |
+| Header `Origin` fora de `CORS_ORIGIN` | `403` `{ "error": "Origin não permitida" }` |
+
+A validação de `Origin` só se aplica quando a requisição envia o header `Origin` e `CORS_ORIGIN` está definida (lista separada por vírgulas). Clientes sem `Origin` (curl, ponte stdio) sempre passam.
+
+**Negociação de versão:** `initialize` devolve a `protocolVersion` enviada pelo cliente se ela for uma das suportadas (`2025-06-18`, `2025-03-26`, `2024-11-05`); caso contrário, responde `2025-06-18`.
+
+**Erros:** tool desconhecida retorna o erro JSON-RPC `-32602`. Exceções durante a execução de uma tool retornam `result.isError: true` com o texto `Falha ao executar <tool>: <mensagem>`.
+
+### Conectar via stdio
+
+Clientes desktop como Claude Desktop e Cursor falam MCP por stdio. A ponte `stdio-bridge-main` lê uma mensagem JSON-RPC por linha no stdin, encaminha cada uma para o endpoint HTTP acima e escreve as respostas no stdout (os logs vão apenas para o stderr). Se o backend estiver fora do ar, cada requisição recebe um erro JSON-RPC `-32603` e a ponte continua ativa.
+
+Variáveis de ambiente:
+
+| Variável | Padrão | Descrição |
+|---|---|---|
+| `TRACEGUARD_MCP_URL` | `http://localhost:3001/api/v1/mcp` | Endpoint HTTP do backend |
+| `TRACEGUARD_API_KEY` | — | Se definida, enviada no header `x-api-key` |
+
+Compile o backend (`pnpm --filter @traceguard/backend build`) e use o arquivo compilado com `node`, o que evita que banners do pnpm/tsx sujem o stdout. Exemplo de `claude_desktop_config.json`:
+
+```json
+{
+  "mcpServers": {
+    "traceguard": {
+      "command": "node",
+      "args": ["<caminho absoluto>/apps/backend/dist/mcp/stdio-bridge-main.js"],
+      "env": {
+        "TRACEGUARD_MCP_URL": "http://localhost:3001/api/v1/mcp"
+      }
+    }
+  }
+}
+```
+
 ---
 
 ## GET /api/v1/events/stats

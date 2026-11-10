@@ -12,6 +12,7 @@ import { toDashboardEvent } from "../db/mappers.js";
 import { getEventStats, listEventsByTraceId, listRecentEvents } from "../db/pool.js";
 import { getRaspStats, listRaspEventsByTraceId, listRecentRaspEvents } from "../db/rasp.js";
 import { handleMcpRequest, type JsonRpcRequest } from "../mcp/handler.js";
+import { isMcpOriginAllowed } from "../mcp/origin.js";
 import { publishLogEvents } from "../publishers/rabbitmq.js";
 import { eventHub } from "../realtime/event-hub.js";
 import { getTraceDetail } from "../traces/get-trace.js";
@@ -97,9 +98,17 @@ export async function registerRoutes(app: FastifyInstance): Promise<void> {
     }
   );
 
-  app.post("/api/v1/mcp", async (request) => {
+  app.get("/api/v1/mcp", async (_request, reply) => {
+    return reply.status(405).header("Allow", "POST").send();
+  });
+
+  app.post("/api/v1/mcp", async (request, reply) => {
+    if (!isMcpOriginAllowed(request.headers.origin, process.env.CORS_ORIGIN)) {
+      return reply.status(403).send({ error: "Origin não permitida" });
+    }
+
     const body = (request.body ?? {}) as JsonRpcRequest;
-    return handleMcpRequest(body, {
+    const response = await handleMcpRequest(body, {
       getTrace: lookupTrace,
       getRaspOverview: async (limit) => {
         const [stats, events] = await Promise.all([
@@ -116,6 +125,11 @@ export async function registerRoutes(app: FastifyInstance): Promise<void> {
         return { stats, alerts };
       },
     });
+
+    if (response === null) {
+      return reply.status(202).send();
+    }
+    return reply.status(200).send(response);
   });
 
   app.get<{ Querystring: { since?: string; bucket?: string } }>(

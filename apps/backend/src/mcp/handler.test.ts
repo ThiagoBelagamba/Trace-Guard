@@ -1,6 +1,10 @@
 import { describe, expect, it } from "vitest";
 import type { TraceDetail } from "@traceguard/shared";
-import { handleMcpRequest, type McpDependencies } from "./handler.js";
+import {
+  handleMcpRequest,
+  type JsonRpcRequest,
+  type McpDependencies,
+} from "./handler.js";
 
 const mockDetail: TraceDetail = {
   traceId: "abcd1234abcd1234abcd1234abcd1234",
@@ -66,7 +70,7 @@ describe("handleMcpRequest (Model Context Protocol JSON-RPC 2.0)", () => {
       jsonrpc: "2.0",
       id: 1,
       result: {
-        protocolVersion: "2024-11-05",
+        protocolVersion: "2025-06-18",
         capabilities: { tools: {} },
         serverInfo: {
           name: "traceguard-mcp",
@@ -86,7 +90,7 @@ describe("handleMcpRequest (Model Context Protocol JSON-RPC 2.0)", () => {
       deps
     );
 
-    const tools = (response.result as { tools: Array<{ name: string }> }).tools;
+    const tools = (response!.result as { tools: Array<{ name: string }> }).tools;
     expect(tools.map((t) => t.name)).toEqual([
       "investigate_trace",
       "list_security_threats",
@@ -108,7 +112,7 @@ describe("handleMcpRequest (Model Context Protocol JSON-RPC 2.0)", () => {
       deps
     );
 
-    const result = response.result as {
+    const result = response!.result as {
       isError?: boolean;
       content: Array<{ type: string; text: string }>;
     };
@@ -136,11 +140,107 @@ describe("handleMcpRequest (Model Context Protocol JSON-RPC 2.0)", () => {
       deps
     );
 
-    const result = response.result as {
+    const result = response!.result as {
       isError?: boolean;
       content: Array<{ type: string; text: string }>;
     };
     expect(result.isError).toBe(true);
     expect(result.content[0]!.text).toContain("Trace não encontrado");
+  });
+
+  it("returns null for notifications/initialized", async () => {
+    const response = await handleMcpRequest(
+      { jsonrpc: "2.0", method: "notifications/initialized" },
+      deps
+    );
+    expect(response).toBeNull();
+  });
+
+  it("treats id 0 as a request, not a notification", async () => {
+    const response = await handleMcpRequest(
+      { jsonrpc: "2.0", id: 0, method: "ping" },
+      deps
+    );
+    expect(response).toEqual({ jsonrpc: "2.0", id: 0, result: {} });
+  });
+
+  it("negotiates the protocol version requested by the client", async () => {
+    const supported = await handleMcpRequest(
+      {
+        jsonrpc: "2.0",
+        id: 1,
+        method: "initialize",
+        params: { protocolVersion: "2025-03-26" },
+      },
+      deps
+    );
+    expect(
+      (supported!.result as { protocolVersion: string }).protocolVersion
+    ).toBe("2025-03-26");
+
+    const unsupported = await handleMcpRequest(
+      {
+        jsonrpc: "2.0",
+        id: 2,
+        method: "initialize",
+        params: { protocolVersion: "1999-01-01" },
+      },
+      deps
+    );
+    expect(
+      (unsupported!.result as { protocolVersion: string }).protocolVersion
+    ).toBe("2025-06-18");
+  });
+
+  it("rejects unknown tools with -32602", async () => {
+    const response = await handleMcpRequest(
+      {
+        jsonrpc: "2.0",
+        id: 5,
+        method: "tools/call",
+        params: { name: "does_not_exist" },
+      },
+      deps
+    );
+    expect(response!.error?.code).toBe(-32602);
+  });
+
+  it("reports tool execution failures as isError results", async () => {
+    const response = await handleMcpRequest(
+      {
+        jsonrpc: "2.0",
+        id: 6,
+        method: "tools/call",
+        params: {
+          name: "investigate_trace",
+          arguments: { traceId: mockDetail.traceId },
+        },
+      },
+      {
+        ...deps,
+        getTrace: async () => {
+          throw new Error("db down");
+        },
+      }
+    );
+    const result = response!.result as {
+      isError?: boolean;
+      content: Array<{ type: string; text: string }>;
+    };
+    expect(result.isError).toBe(true);
+    expect(result.content[0]!.text).toContain("db down");
+  });
+
+  it("rejects JSON-RPC batches", async () => {
+    const response = await handleMcpRequest(
+      [] as unknown as JsonRpcRequest,
+      deps
+    );
+    expect(response!.error?.code).toBe(-32600);
+  });
+
+  it("answers an invalid message without id with -32600 instead of treating it as a notification", async () => {
+    const response = await handleMcpRequest({} as JsonRpcRequest, deps);
+    expect(response?.error?.code).toBe(-32600);
   });
 });

@@ -38,6 +38,12 @@ export interface McpDependencies {
   }>;
 }
 
+export const SUPPORTED_PROTOCOL_VERSIONS = [
+  "2025-06-18",
+  "2025-03-26",
+  "2024-11-05",
+] as const;
+
 const MCP_TOOLS = [
   {
     name: "investigate_trace",
@@ -84,10 +90,102 @@ const MCP_TOOLS = [
   },
 ] as const;
 
-export async function handleMcpRequest(
+function negotiateProtocolVersion(requested: unknown): string {
+  if (
+    typeof requested === "string" &&
+    (SUPPORTED_PROTOCOL_VERSIONS as readonly string[]).includes(requested)
+  ) {
+    return requested;
+  }
+  return SUPPORTED_PROTOCOL_VERSIONS[0];
+}
+
+function textResult(id: JsonRpcResponse["id"], value: unknown): JsonRpcResponse {
+  return {
+    jsonrpc: "2.0",
+    id,
+    result: {
+      content: [{ type: "text", text: JSON.stringify(value, null, 2) }],
+    },
+  };
+}
+
+function clampLimit(raw: unknown): number {
+  const value = typeof raw === "number" && Number.isFinite(raw) ? raw : 15;
+  return Math.min(Math.max(Math.trunc(value), 1), 50);
+}
+
+async function callTool(
+  id: JsonRpcResponse["id"],
   request: JsonRpcRequest,
   deps: McpDependencies
 ): Promise<JsonRpcResponse> {
+  const toolName = request.params?.name;
+  const args =
+    (request.params?.arguments as Record<string, unknown> | undefined) ?? {};
+
+  if (toolName === "investigate_trace") {
+    const traceId = typeof args.traceId === "string" ? args.traceId.trim() : "";
+    if (!traceId) {
+      return {
+        jsonrpc: "2.0",
+        id,
+        error: { code: -32602, message: "Parâmetro traceId é obrigatório" },
+      };
+    }
+
+    const detail = await deps.getTrace(traceId);
+    if (!detail) {
+      return {
+        jsonrpc: "2.0",
+        id,
+        result: {
+          isError: true,
+          content: [{ type: "text", text: `Trace não encontrado: ${traceId}` }],
+        },
+      };
+    }
+
+    const buildInsight = deps.generateInsight ?? generateTraceInsight;
+    const insight = await buildInsight(detail);
+    return textResult(id, { trace: detail, insight });
+  }
+
+  if (toolName === "list_security_threats") {
+    return textResult(id, await deps.getRaspOverview(clampLimit(args.limit)));
+  }
+
+  if (toolName === "alert_fatigue_status") {
+    return textResult(id, await deps.getAlertOverview(clampLimit(args.limit)));
+  }
+
+  return {
+    jsonrpc: "2.0",
+    id,
+    error: {
+      code: -32602,
+      message: `Tool desconhecida: ${String(toolName)}`,
+    },
+  };
+}
+
+export async function handleMcpRequest(
+  request: JsonRpcRequest,
+  deps: McpDependencies
+): Promise<JsonRpcResponse | null> {
+  // Lotes JSON-RPC (array) e corpos não-objeto não são suportados.
+  if (
+    typeof request !== "object" ||
+    request === null ||
+    Array.isArray(request)
+  ) {
+    return {
+      jsonrpc: "2.0",
+      id: null,
+      error: { code: -32600, message: "Invalid JSON-RPC 2.0 request" },
+    };
+  }
+
   const id = request.id ?? null;
 
   if (request.jsonrpc !== "2.0" || typeof request.method !== "string") {
@@ -98,13 +196,20 @@ export async function handleMcpRequest(
     };
   }
 
+  // Sem a propriedade "id" é notificação (id: 0 continua sendo requisição).
+  if (!("id" in request)) {
+    return null;
+  }
+
   switch (request.method) {
     case "initialize":
       return {
         jsonrpc: "2.0",
         id,
         result: {
-          protocolVersion: "2024-11-05",
+          protocolVersion: negotiateProtocolVersion(
+            request.params?.protocolVersion
+          ),
           capabilities: { tools: {} },
           serverInfo: {
             name: "traceguard-mcp",
@@ -123,100 +228,26 @@ export async function handleMcpRequest(
         result: { tools: MCP_TOOLS },
       };
 
-    case "tools/call": {
-      const toolName = request.params?.name;
-      const args =
-        (request.params?.arguments as Record<string, unknown> | undefined) ?? {};
-
-      if (toolName === "investigate_trace") {
-        const traceId = typeof args.traceId === "string" ? args.traceId.trim() : "";
-        if (!traceId) {
-          return {
-            jsonrpc: "2.0",
-            id,
-            error: { code: -32602, message: "Parâmetro traceId é obrigatório" },
-          };
-        }
-
-        const detail = await deps.getTrace(traceId);
-        if (!detail) {
-          return {
-            jsonrpc: "2.0",
-            id,
-            result: {
-              isError: true,
-              content: [
-                {
-                  type: "text",
-                  text: `Trace não encontrado: ${traceId}`,
-                },
-              ],
-            },
-          };
-        }
-
-        const buildInsight = deps.generateInsight ?? generateTraceInsight;
-        const insight = await buildInsight(detail);
-
+    case "tools/call":
+      try {
+        return await callTool(id, request, deps);
+      } catch (err) {
+        const message = err instanceof Error ? err.message : String(err);
+        const toolName = String(request.params?.name);
         return {
           jsonrpc: "2.0",
           id,
           result: {
+            isError: true,
             content: [
               {
                 type: "text",
-                text: JSON.stringify({ trace: detail, insight }, null, 2),
+                text: `Falha ao executar ${toolName}: ${message}`,
               },
             ],
           },
         };
       }
-
-      if (toolName === "list_security_threats") {
-        const rawLimit = typeof args.limit === "number" ? args.limit : 15;
-        const limit = Math.min(Math.max(Math.trunc(rawLimit), 1), 50);
-        const overview = await deps.getRaspOverview(limit);
-        return {
-          jsonrpc: "2.0",
-          id,
-          result: {
-            content: [
-              {
-                type: "text",
-                text: JSON.stringify(overview, null, 2),
-              },
-            ],
-          },
-        };
-      }
-
-      if (toolName === "alert_fatigue_status") {
-        const rawLimit = typeof args.limit === "number" ? args.limit : 15;
-        const limit = Math.min(Math.max(Math.trunc(rawLimit), 1), 50);
-        const overview = await deps.getAlertOverview(limit);
-        return {
-          jsonrpc: "2.0",
-          id,
-          result: {
-            content: [
-              {
-                type: "text",
-                text: JSON.stringify(overview, null, 2),
-              },
-            ],
-          },
-        };
-      }
-
-      return {
-        jsonrpc: "2.0",
-        id,
-        error: {
-          code: -32601,
-          message: `Tool desconhecida: ${String(toolName)}`,
-        },
-      };
-    }
 
     default:
       return {
