@@ -4,6 +4,7 @@ import { bindContext } from "../core/hooks.js";
 import { continueOrCreateContext } from "../core/traceparent.js";
 import { getRaspRuntime } from "../runtime.js";
 import { getHeader } from "../rasp/fingerprints.js";
+import { buildRaspMetadata } from "../rasp/metadata.js";
 import type { IncomingRequestLike, RaspConfig } from "../rasp/types.js";
 
 function extractClientIp(req: {
@@ -98,7 +99,7 @@ export function raspMiddleware(options?: Partial<RaspConfig>): RequestHandler {
           path: incoming.path,
           method: incoming.method,
           score,
-          metadata: { threats },
+          metadata: buildRaspMetadata(threats, effectiveConfig),
           timestamp: new Date().toISOString(),
         };
 

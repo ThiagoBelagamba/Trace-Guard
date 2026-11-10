@@ -1,4 +1,4 @@
-import type { RaspThreatType } from "@traceguard/shared";
+import { RASP_THREAT_WEIGHTS, type RaspThreatType } from "@traceguard/shared";
 import {
   detectBotUserAgent,
   detectMissingHeaders,
@@ -6,16 +6,6 @@ import {
 } from "./fingerprints.js";
 import type { RateLimiterBackend } from "./rate-limiter-backend.js";
 import type { IncomingRequestLike, RaspAnalysisResult, RaspConfig } from "./types.js";
-
-/**
- * Pesos heurísticos por tipo de ameaça (0–100).
- */
-const THREAT_SCORES: Record<RaspThreatType, number> = {
-  rate_limit: 40,
-  bot_user_agent: 50,
-  sequential_scan: 60,
-  missing_headers: 20,
-};
 
 export class RaspDetector {
   private readonly config: RaspConfig;
@@ -36,13 +26,13 @@ export class RaspDetector {
     const requestCount = await this.rateLimiter.record(clientIp);
     if (requestCount > this.config.maxRequestsPerMinute) {
       threats.push("rate_limit");
-      score += THREAT_SCORES.rate_limit;
+      score += RASP_THREAT_WEIGHTS.rate_limit;
     }
 
     const userAgent = getHeader(req.headers, "user-agent");
     if (detectBotUserAgent(userAgent)) {
       threats.push("bot_user_agent");
-      score += THREAT_SCORES.bot_user_agent;
+      score += RASP_THREAT_WEIGHTS.bot_user_agent;
     }
 
     const pathCount = await this.rateLimiter.distinctPathsInWindow(
@@ -51,12 +41,12 @@ export class RaspDetector {
     );
     if (pathCount > this.config.sequentialScanThreshold) {
       threats.push("sequential_scan");
-      score += THREAT_SCORES.sequential_scan;
+      score += RASP_THREAT_WEIGHTS.sequential_scan;
     }
 
     if (detectMissingHeaders(req)) {
       threats.push("missing_headers");
-      score += THREAT_SCORES.missing_headers;
+      score += RASP_THREAT_WEIGHTS.missing_headers;
     }
 
     return {

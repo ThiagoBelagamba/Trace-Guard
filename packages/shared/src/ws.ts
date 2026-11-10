@@ -41,6 +41,14 @@ export type TraceVerdict =
   | "degraded"
   | "normal";
 
+/** Motivo pelo qual o refinamento por LLM foi descartado e o motor causal foi usado. */
+export type LlmFallbackReason =
+  | "timeout"
+  | "http_error"
+  | "network_error"
+  | "invalid_response"
+  | "rejected_output";
+
 export interface TraceInsight {
   traceId: string;
   verdict: TraceVerdict;
@@ -58,6 +66,8 @@ export interface TraceInsight {
   correlatedPillars: Array<"apm" | "rasp" | "alert">;
   source: "causal-engine" | "llm";
   model?: string;
+  /** Presente quando um LLM estava configurado mas falhou ou foi rejeitado. */
+  llmFallback?: LlmFallbackReason;
   generatedAt: string;
 }
 

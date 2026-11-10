@@ -7,6 +7,7 @@ import { formatTime } from "../lib/format";
 import { threatLabel } from "../lib/labels";
 import {
   buildMcpInvestigateSnippet,
+  insightSourceLabel,
   insightTone,
   levelTone,
   pillarLabel,
@@ -26,41 +27,62 @@ export function TraceDrawer({ traceId, onClose }: TraceDrawerProps) {
   const [copiedMcp, setCopiedMcp] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
+  const [insightLoading, setInsightLoading] = useState(false);
 
+  // A linha do tempo depende só de fetchTrace e não espera o diagnóstico (que pode demorar com LLM).
   useEffect(() => {
     if (!traceId) {
       setDetail(null);
-      setInsight(null);
-      setShowMcp(false);
       setError(null);
+      setLoading(false);
       return;
     }
 
     let cancelled = false;
     setLoading(true);
     setError(null);
-    setInsight(null);
-    setShowMcp(false);
+    setDetail(null);
 
-    void Promise.all([
-      fetchTrace(traceId),
-      fetchTraceInsight(traceId).catch(() => null),
-    ])
-      .then(([traceData, insightData]) => {
-        if (!cancelled) {
-          setDetail(traceData);
-          setInsight(insightData);
-        }
+    void fetchTrace(traceId)
+      .then((traceData) => {
+        if (!cancelled) setDetail(traceData);
       })
       .catch((err: unknown) => {
         if (!cancelled) {
           setDetail(null);
-          setInsight(null);
           setError(err instanceof Error ? err.message : "Falha ao carregar trace");
         }
       })
       .finally(() => {
         if (!cancelled) setLoading(false);
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [traceId]);
+
+  useEffect(() => {
+    setShowMcp(false);
+    if (!traceId) {
+      setInsight(null);
+      setInsightLoading(false);
+      return;
+    }
+
+    let cancelled = false;
+    setInsight(null);
+    setInsightLoading(true);
+
+    void fetchTraceInsight(traceId)
+      .then((insightData) => {
+        if (!cancelled) setInsight(insightData);
+      })
+      .catch(() => {
+        if (!cancelled) setInsight(null);
+      })
+      .finally(() => {
+        if (!cancelled) setInsightLoading(false);
       });
 
     return () => {
@@ -115,10 +137,20 @@ export function TraceDrawer({ traceId, onClose }: TraceDrawerProps) {
         <div className="flex-1 overflow-auto px-5 py-4">
           {loading && (
             <p className="m-0 text-sm text-tg-text-2">
-              Correlacionando APM + RASP + Alertas e gerando diagnóstico…
+              Correlacionando APM + RASP + Alertas…
             </p>
           )}
           {error && <p className="m-0 text-sm text-tg-error-text">{error}</p>}
+
+          {insightLoading && !insight && (
+            <section
+              aria-label="Copiloto Forense do Trace"
+              aria-busy="true"
+              className="mb-4 rounded-tg-lg border border-tg-border-strong bg-tg-surface-2 p-4"
+            >
+              <p className="m-0 text-sm text-tg-text-2">Gerando diagnóstico forense…</p>
+            </section>
+          )}
 
           {insight && (
             <section
@@ -131,10 +163,7 @@ export function TraceDrawer({ traceId, onClose }: TraceDrawerProps) {
                     <Icon name="sparkle" size={14} />
                   </span>
                   <span className="text-xs font-medium text-tg-text-2">
-                    Copiloto Forense ·{" "}
-                    {insight.source === "llm"
-                      ? `LLM (${insight.model ?? "IA"})`
-                      : "Motor Causal"}
+                    Copiloto Forense · {insightSourceLabel(insight)}
                   </span>
                   <Pill tone={insightTone(insight.severity)} mono>
                     {insight.verdict}

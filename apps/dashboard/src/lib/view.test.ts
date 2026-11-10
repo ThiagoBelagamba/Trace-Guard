@@ -1,4 +1,5 @@
 import { describe, expect, it } from "vitest";
+import type { TraceInsight } from "@traceguard/shared";
 import { threatLabel } from "./labels";
 import {
   alertSource,
@@ -9,6 +10,7 @@ import {
   chartYMax,
   activeMonitorsLabel,
   countByLevel,
+  insightSourceLabel,
   insightTone,
   levelTone,
   orderLevels,
@@ -144,6 +146,51 @@ describe("forensic insight & MCP helpers", () => {
     expect(insightTone("warning")).toBe("warn");
     expect(insightTone("info")).toBe("info");
     expect(insightTone("ok")).toBe("ok");
+  });
+
+  describe("insightSourceLabel", () => {
+    const insight: TraceInsight = {
+      traceId: "t1",
+      verdict: "normal",
+      severity: "ok",
+      headline: "h",
+      narrative: "n",
+      rootCause: { category: "healthy", summary: "s", service: "svc", spanId: null },
+      causalChain: [],
+      recommendations: [],
+      correlatedPillars: [],
+      source: "causal-engine",
+      generatedAt: "2026-11-09T10:00:00.000Z",
+    };
+
+    it("mostra o modelo quando o LLM respondeu", () => {
+      expect(insightSourceLabel({ ...insight, source: "llm", model: "qwen2.5" })).toBe(
+        "LLM (qwen2.5)"
+      );
+      expect(insightSourceLabel({ ...insight, source: "llm" })).toBe("LLM (IA)");
+    });
+
+    it("mostra só Motor Causal quando não havia LLM configurado", () => {
+      expect(insightSourceLabel(insight)).toBe("Motor Causal");
+    });
+
+    it("explica o fallback quando o LLM falhou", () => {
+      expect(insightSourceLabel({ ...insight, llmFallback: "timeout" })).toBe(
+        "Motor Causal · LLM indisponível (timeout)"
+      );
+      expect(insightSourceLabel({ ...insight, llmFallback: "http_error" })).toBe(
+        "Motor Causal · LLM indisponível (erro HTTP)"
+      );
+      expect(insightSourceLabel({ ...insight, llmFallback: "network_error" })).toBe(
+        "Motor Causal · LLM indisponível (falha de rede)"
+      );
+      expect(insightSourceLabel({ ...insight, llmFallback: "invalid_response" })).toBe(
+        "Motor Causal · LLM indisponível (resposta inválida)"
+      );
+      expect(insightSourceLabel({ ...insight, llmFallback: "rejected_output" })).toBe(
+        "Motor Causal · LLM indisponível (resposta rejeitada)"
+      );
+    });
   });
 
   it("pillarLabel formata os pilares correlacionados", () => {

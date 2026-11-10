@@ -1,4 +1,7 @@
-import type { RaspThreatType } from "@traceguard/shared";
+import {
+  DEFAULT_RASP_BLOCK_THRESHOLD,
+  type RaspThreatType,
+} from "@traceguard/shared";
 
 export interface RaspConfig {
   enabled: boolean;
@@ -13,7 +16,7 @@ export const DEFAULT_RASP_CONFIG: RaspConfig = {
   enabled: true,
   mode: "block",
   maxRequestsPerMinute: 60,
-  blockThreshold: 70,
+  blockThreshold: DEFAULT_RASP_BLOCK_THRESHOLD,
   sequentialScanThreshold: 20,
 };
 

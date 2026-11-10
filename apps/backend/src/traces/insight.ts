@@ -1,23 +1,78 @@
-import type { RaspEvent, TraceDetail, TraceInsight } from "@traceguard/shared";
+import {
+  DEFAULT_RASP_BLOCK_THRESHOLD,
+  RASP_THREAT_WEIGHTS,
+  type LlmFallbackReason,
+  type RaspEvent,
+  type RaspThreatType,
+  type TraceDetail,
+  type TraceInsight,
+} from "@traceguard/shared";
+import {
+  LLM_SYSTEM_PROMPT,
+  buildLlmUserPayload,
+  parseLlmRefinement,
+} from "./llm-guard.js";
 
-const HEURISTIC_WEIGHTS: Record<string, { label: string; weight: number }> = {
-  sequential_scan: { label: "varredura sequencial de rotas", weight: 60 },
-  bot_user_agent: { label: "assinatura de User-Agent automatizado", weight: 50 },
-  rate_limit: { label: "excesso de requisições por minuto", weight: 40 },
-  missing_headers: { label: "ausência de cabeçalhos de navegador", weight: 20 },
+/** Rótulos das heurísticas; o peso vem de `RASP_THREAT_WEIGHTS` (fonte única). */
+const HEURISTIC_WEIGHTS: Record<RaspThreatType, { label: string }> = {
+  sequential_scan: { label: "varredura sequencial de rotas" },
+  bot_user_agent: { label: "assinatura de User-Agent automatizado" },
+  rate_limit: { label: "excesso de requisições por minuto" },
+  missing_headers: { label: "ausência de cabeçalhos de navegador" },
 };
 
-function describeHeuristics(rasp: RaspEvent): string {
+function isKnownThreat(key: string): key is RaspThreatType {
+  return Object.prototype.hasOwnProperty.call(RASP_THREAT_WEIGHTS, key);
+}
+
+function threatKeys(rasp: RaspEvent): string[] {
   const rawThreats = Array.isArray(rasp.metadata?.threats)
     ? rasp.metadata.threats.filter((t): t is string => typeof t === "string")
     : [rasp.threatType];
-  const unique = Array.from(new Set(rawThreats));
-  return unique
-    .map((key) => {
-      const info = HEURISTIC_WEIGHTS[key];
-      return info ? `${info.label} (+${info.weight})` : key;
-    })
+  return Array.from(new Set(rawThreats));
+}
+
+function describeHeuristics(rasp: RaspEvent): string {
+  return threatKeys(rasp)
+    .map((key) =>
+      isKnownThreat(key)
+        ? `${HEURISTIC_WEIGHTS[key].label} (+${RASP_THREAT_WEIGHTS[key]})`
+        : key
+    )
     .join(" + ");
+}
+
+function describeAttackKind(rasp: RaspEvent): string {
+  const keys = threatKeys(rasp);
+  if (keys.includes("sequential_scan")) return "tentativa de scraping";
+  if (keys.includes("bot_user_agent")) return "acesso automatizado (bot)";
+  if (keys.includes("rate_limit")) return "excesso de requisições";
+  return "requisição suspeita";
+}
+
+/**
+ * Política efetiva do RASP no momento do evento. Eventos antigos não trazem
+ * `blockThreshold`/`mode`: usa-se o limiar padrão e o modo fica `unknown`,
+ * salvo quando um evento apenas registrado acima do limiar só se explica por modo monitor.
+ */
+export function resolveRaspPolicy(rasp: RaspEvent): {
+  blockThreshold: number;
+  mode: "monitor" | "block" | "unknown";
+} {
+  const recordedThreshold = rasp.metadata?.blockThreshold;
+  const blockThreshold =
+    typeof recordedThreshold === "number" && Number.isFinite(recordedThreshold)
+      ? recordedThreshold
+      : DEFAULT_RASP_BLOCK_THRESHOLD;
+
+  const recordedMode = rasp.metadata?.mode;
+  let mode: "monitor" | "block" | "unknown" =
+    recordedMode === "monitor" || recordedMode === "block" ? recordedMode : "unknown";
+  if (mode === "unknown" && rasp.action === "logged" && rasp.score >= blockThreshold) {
+    mode = "monitor";
+  }
+
+  return { blockThreshold, mode };
 }
 
 function buildPillars(detail: TraceDetail): Array<"apm" | "rasp" | "alert"> {
@@ -51,13 +106,20 @@ export function synthesizeTraceInsight(
     const primaryRasp = [...detail.raspEvents].sort((a, b) => b.score - a.score)[0]!;
     const blocked = detail.raspEvents.some((e) => e.action === "blocked");
     const heuristicSummary = describeHeuristics(primaryRasp);
+    const attackKind = describeAttackKind(primaryRasp);
+    const { blockThreshold, mode } = resolveRaspPolicy(primaryRasp);
+    const { score, method, path, spanId } = primaryRasp;
+
+    const actionLine = blocked
+      ? `Ação em runtime: requisição interceptada com HTTP 403 no span ${spanId} (score ${score} >= limiar ${blockThreshold}).`
+      : mode === "monitor"
+        ? `Ação em runtime: requisição registrada em modo monitor, sem bloqueio, no span ${spanId} (score ${score}, limiar ${blockThreshold}).`
+        : `Ação em runtime: requisição registrada sem bloqueio no span ${spanId} (score ${score} abaixo do limiar ${blockThreshold}).`;
 
     const causalChain: string[] = [
-      `Origem ${primaryRasp.clientIp} enviou ${primaryRasp.method} ${primaryRasp.path}${primaryRasp.userAgent ? ` (UA: ${primaryRasp.userAgent})` : ""}.`,
-      `Middleware RASP em ${primaryRasp.service} somou score ${primaryRasp.score}/100: ${heuristicSummary}.`,
-      blocked
-        ? `Ação em runtime: requisição interceptada com HTTP 403 no span ${primaryRasp.spanId} (score ${primaryRasp.score} >= limiar 70).`
-        : `Ação em runtime: requisição apenas registrada em modo monitor no span ${primaryRasp.spanId} (score ${primaryRasp.score}).`,
+      `Origem ${primaryRasp.clientIp} enviou ${method} ${path}${primaryRasp.userAgent ? ` (UA: ${primaryRasp.userAgent})` : ""}.`,
+      `Middleware RASP em ${primaryRasp.service} somou score ${score}/100: ${heuristicSummary}.`,
+      actionLine,
     ];
 
     if (detail.events.length > 0) {
@@ -72,27 +134,44 @@ export function synthesizeTraceInsight(
     }
 
     const recommendations: string[] = [];
-    if (!blocked) {
-      recommendations.push(
-        "Ativar RASP_MODE=block em produção para interromper requisições com score >= 70 antes do controller."
-      );
-    } else {
+    if (blocked) {
       recommendations.push(
         `Manter bloqueio em memória/Redis ativo para o IP ${primaryRasp.clientIp} e auditar reincidência na aba Segurança.`
       );
+    } else if (mode === "monitor") {
+      recommendations.push(
+        `Ativar RASP_MODE=block em produção para interromper requisições com score >= ${blockThreshold} antes do controller.`
+      );
+    } else if (score < blockThreshold) {
+      recommendations.push(
+        `Score ${score} ficou abaixo do limiar ${blockThreshold}; avaliar se o limiar está adequado para a rota ${path}.`
+      );
     }
     recommendations.push(
-      `Verificar se a rota ${primaryRasp.path} exige paginação autenticada ou limite específico por IP.`
+      `Verificar se a rota ${path} exige paginação autenticada ou limite específico por IP.`
     );
+
+    const apmPart =
+      detail.events.length > 0
+        ? `com ${detail.events.length} evento(s) de telemetria APM`
+        : blocked
+          ? "sem telemetria APM (a requisição foi interrompida antes de chegar ao handler)"
+          : "sem telemetria APM correlacionada";
+    const alertsPart =
+      alerts.length > 0
+        ? detail.events.length > 0
+          ? ` e ${alerts.length} registro(s) de alerta`
+          : `, além de ${alerts.length} registro(s) de alerta`
+        : "";
 
     return {
       traceId: detail.traceId,
       verdict: blocked ? "attack_blocked" : "attack_monitored",
       severity: blocked ? "critical" : "warning",
       headline: blocked
-        ? `Tentativa de scraping bloqueada pelo RASP (${primaryRasp.method} ${primaryRasp.path} · score ${primaryRasp.score}/100)`
-        : `Ameaça RASP registrada em modo monitor (${primaryRasp.method} ${primaryRasp.path} · score ${primaryRasp.score}/100)`,
-      narrative: `O mesmo traceId correlacionou a inspeção RASP do IP ${primaryRasp.clientIp} (${heuristicSummary}, totalizando score ${primaryRasp.score}/100) com ${detail.events.length} evento(s) de telemetria APM${alerts.length > 0 ? ` e ${alerts.length} registro(s) de alerta` : ""}.`,
+        ? `RASP bloqueou ${attackKind} (${method} ${path} · score ${score}/100)`
+        : `RASP registrou ${attackKind} sem bloqueio (${method} ${path} · score ${score}/100)`,
+      narrative: `O mesmo traceId correlacionou a inspeção RASP do IP ${primaryRasp.clientIp} (${heuristicSummary}, totalizando score ${score}/100) ${apmPart}${alertsPart}.`,
       rootCause: {
         category: "rasp",
         summary: `${heuristicSummary} a partir de ${primaryRasp.clientIp}`,
@@ -226,6 +305,18 @@ export interface GenerateInsightOptions {
   model?: string;
   timeoutMs?: number;
   fetchImpl?: typeof fetch;
+  /** Destino do log de fallback do LLM (padrão: `console.warn`). */
+  logger?: (message: string) => void;
+}
+
+const DEFAULT_AI_TIMEOUT_MS = 10_000;
+
+function isTimeoutError(error: unknown): boolean {
+  return (
+    typeof error === "object" &&
+    error !== null &&
+    (error as { name?: unknown }).name === "TimeoutError"
+  );
 }
 
 /**
@@ -245,7 +336,14 @@ export async function generateTraceInsight(
   const model = (options?.model ?? process.env.AI_MODEL ?? "gpt-4o-mini").trim();
   const apiKey = (options?.apiKey ?? process.env.AI_API_KEY ?? "").trim();
   const fetchImpl = options?.fetchImpl ?? fetch;
-  const timeoutMs = options?.timeoutMs ?? 3_500;
+  const timeoutMs =
+    options?.timeoutMs ?? (Number(process.env.AI_TIMEOUT_MS) || DEFAULT_AI_TIMEOUT_MS);
+  const logger = options?.logger ?? ((message: string) => console.warn(message));
+
+  const fallback = (reason: LlmFallbackReason): TraceInsight => {
+    logger(`[insight] LLM fallback (${reason}) trace=${detail.traceId}`);
+    return { ...base, llmFallback: reason };
+  };
 
   try {
     const response = await fetchImpl(`${apiUrl}/chat/completions`, {
@@ -259,60 +357,38 @@ export async function generateTraceInsight(
         temperature: 0.1,
         response_format: { type: "json_object" },
         messages: [
-          {
-            role: "system",
-            content:
-              "Você é o Copiloto Forense do TraceGuard (APM + RASP + Alertas). Responda apenas JSON com as chaves headline (string), narrative (string em português técnico conciso) e recommendations (array de strings).",
-          },
-          {
-            role: "user",
-            content: JSON.stringify({
-              traceId: detail.traceId,
-              baseDiagnosis: base,
-              events: detail.events.slice(0, 15),
-              raspEvents: detail.raspEvents.slice(0, 10),
-              alerts: (detail.alerts ?? []).slice(0, 10),
-            }),
-          },
+          { role: "system", content: LLM_SYSTEM_PROMPT },
+          { role: "user", content: buildLlmUserPayload(detail, base) },
         ],
       }),
       signal: AbortSignal.timeout(timeoutMs),
     });
 
-    if (!response.ok) return base;
+    if (!response.ok) return fallback("http_error");
 
     const payload = (await response.json()) as {
-      choices?: Array<{ message?: { content?: string } }>;
-    };
-    const rawContent = payload.choices?.[0]?.message?.content;
-    if (!rawContent) return base;
+      choices?: Array<{ message?: { content?: unknown } }>;
+    } | null;
+    const rawContent = payload?.choices?.[0]?.message?.content;
+    if (typeof rawContent !== "string" || !rawContent.trim()) {
+      return fallback("invalid_response");
+    }
 
-    const parsed = JSON.parse(rawContent) as {
-      headline?: unknown;
-      narrative?: unknown;
-      recommendations?: unknown;
-    };
+    const refinement = parseLlmRefinement(rawContent, base);
+    if (!refinement.ok) return fallback(refinement.reason);
 
     return {
       ...base,
-      headline:
-        typeof parsed.headline === "string" && parsed.headline.trim()
-          ? parsed.headline.trim()
-          : base.headline,
-      narrative:
-        typeof parsed.narrative === "string" && parsed.narrative.trim()
-          ? parsed.narrative.trim()
-          : base.narrative,
-      recommendations:
-        Array.isArray(parsed.recommendations) &&
-        parsed.recommendations.every((item) => typeof item === "string") &&
-        parsed.recommendations.length > 0
-          ? (parsed.recommendations as string[])
-          : base.recommendations,
+      headline: refinement.headline,
+      narrative: refinement.narrative,
+      recommendations: refinement.recommendations,
       source: "llm",
       model,
     };
-  } catch {
-    return base;
+  } catch (error) {
+    if (isTimeoutError(error)) return fallback("timeout");
+    // Corpo da resposta HTTP que não é JSON válido.
+    if (error instanceof SyntaxError) return fallback("invalid_response");
+    return fallback("network_error");
   }
 }

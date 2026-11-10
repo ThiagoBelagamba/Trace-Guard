@@ -1,3 +1,5 @@
+import type { LlmFallbackReason, TraceInsight } from "@traceguard/shared";
+
 /** Funções puras de apresentação: só derivam percentuais, somas e tons de dados existentes. */
 
 export type Tone = "error" | "warn" | "info" | "threat" | "ok" | "neutral";
@@ -104,6 +106,21 @@ export function insightTone(severity: "critical" | "warning" | "info" | "ok"): T
   if (severity === "warning") return "warn";
   if (severity === "info") return "info";
   return "ok";
+}
+
+const LLM_FALLBACK_LABELS: Record<LlmFallbackReason, string> = {
+  timeout: "timeout",
+  http_error: "erro HTTP",
+  network_error: "falha de rede",
+  invalid_response: "resposta inválida",
+  rejected_output: "resposta rejeitada",
+};
+
+/** Origem do diagnóstico no cabeçalho do card: LLM, motor causal ou motor causal após falha do LLM. */
+export function insightSourceLabel(insight: TraceInsight): string {
+  if (insight.source === "llm") return `LLM (${insight.model ?? "IA"})`;
+  if (!insight.llmFallback) return "Motor Causal";
+  return `Motor Causal · LLM indisponível (${LLM_FALLBACK_LABELS[insight.llmFallback]})`;
 }
 
 export function pillarLabel(pillar: "apm" | "rasp" | "alert"): string {
