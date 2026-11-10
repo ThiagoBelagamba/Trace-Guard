@@ -145,11 +145,41 @@ export async function listAlertsByTraceId(traceId: string): Promise<AlertFired[]
      FROM alerts_fired af
      JOIN alert_rules ar ON ar.id = af.rule_id
      WHERE af.metadata->>'traceId' = $1
+        OR af.metadata->'traceIds' @> jsonb_build_array($1::text)
      ORDER BY af.fired_at ASC
      LIMIT 50`,
     [traceId]
   );
   return result.rows.map(toAlertFired);
+}
+
+export async function listErrorTraceIdsInWindow(
+  service: string | null,
+  windowMin: number,
+  limit: number
+): Promise<string[]> {
+  const params: unknown[] = [windowMin];
+  let serviceClause = "";
+
+  if (service) {
+    params.push(service);
+    serviceClause = `AND service = $${params.length}`;
+  }
+  params.push(limit);
+
+  const result = await getPool().query<{ trace_id: string }>(
+    `SELECT trace_id
+     FROM telemetry_events
+     WHERE level = 'error'
+       AND created_at >= NOW() - ($1::int * INTERVAL '1 minute')
+       ${serviceClause}
+     GROUP BY trace_id
+     ORDER BY MAX(created_at) DESC
+     LIMIT $${params.length}`,
+    params
+  );
+
+  return result.rows.map((row) => row.trace_id);
 }
 
 export async function getAlertStats(): Promise<AlertStats> {

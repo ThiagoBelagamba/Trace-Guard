@@ -6,11 +6,16 @@ import {
   findErrorBursts,
   insertAlertFired,
   listEnabledRules,
+  listErrorTraceIdsInWindow,
   toAlertFired,
 } from "../db/alerts.js";
-import { countRaspThreatsInWindow } from "../db/rasp.js";
+import {
+  countRaspThreatsInWindow,
+  listRaspTraceIdsInWindow,
+} from "../db/rasp.js";
 import { countConsecutiveDown, getMonitorById } from "../db/uptime.js";
 import { cooldownRegistry } from "./cooldown.js";
+import { buildTraceLinks, MAX_LINKED_TRACES } from "./trace-links.js";
 
 const ALL_SERVICES = "all";
 
@@ -44,10 +49,9 @@ export class AlertEngine {
       (r) => r.ruleType === "rasp_threat_count"
     );
     const results: AlertFired[] = [];
-    const latestTraceId = inserted[0]?.trace_id;
 
     for (const rule of rules) {
-      const alert = await this.evaluateRaspRule(rule, latestTraceId);
+      const alert = await this.evaluateRaspRule(rule);
       if (alert) results.push(alert);
     }
 
@@ -106,10 +110,7 @@ export class AlertEngine {
     return toAlertFired({ ...row, rule_name: rule.name });
   }
 
-  private async evaluateRaspRule(
-    rule: AlertRule,
-    traceId?: string
-  ): Promise<AlertFired | null> {
+  private async evaluateRaspRule(rule: AlertRule): Promise<AlertFired | null> {
     const cooldownKey = rule.service ?? ALL_SERVICES;
     const inCooldown = cooldownRegistry.isInCooldown(
       rule.id,
@@ -134,6 +135,14 @@ export class AlertEngine {
       ? `RASP: ${count} bots detectados`
       : `RASP: ${count} ameaças na janela`;
     const message = `${count} eventos RASP nos últimos ${rule.windowMin} min (limite: ${rule.threshold})`;
+    const links = buildTraceLinks(
+      await listRaspTraceIdsInWindow(
+        rule.windowMin,
+        rule.service,
+        threatFilter,
+        MAX_LINKED_TRACES
+      )
+    );
 
     const row = await insertAlertFired({
       ruleId: rule.id,
@@ -146,7 +155,7 @@ export class AlertEngine {
       metadata: {
         threatFilter,
         raspCount: count,
-        ...(traceId ? { traceId } : {}),
+        ...links,
       },
     });
 
@@ -191,7 +200,18 @@ export class AlertEngine {
           severity = rate >= rule.threshold * 1.5 ? "critical" : "warning";
           title = `Taxa de erro ${rate.toFixed(1)}% (${serviceLabel})`;
           message = `${errors} erros de ${total} eventos nos últimos ${rule.windowMin} min`;
-          metadata = { errorRate: rate, total, errors };
+          metadata = {
+            errorRate: rate,
+            total,
+            errors,
+            ...buildTraceLinks(
+              await listErrorTraceIdsInWindow(
+                serviceFilter,
+                rule.windowMin,
+                MAX_LINKED_TRACES
+              )
+            ),
+          };
         }
         break;
       }
@@ -207,7 +227,16 @@ export class AlertEngine {
           severity = errors >= rule.threshold * 2 ? "critical" : "warning";
           title = `Pico de ${errors} erros (${serviceLabel})`;
           message = `${errors} eventos de erro nos últimos ${rule.windowMin} min (limite: ${rule.threshold})`;
-          metadata = { errors };
+          metadata = {
+            errors,
+            ...buildTraceLinks(
+              await listErrorTraceIdsInWindow(
+                serviceFilter,
+                rule.windowMin,
+                MAX_LINKED_TRACES
+              )
+            ),
+          };
         }
         break;
       }
@@ -225,7 +254,7 @@ export class AlertEngine {
           title = `Rajada de erros no trace ${burst.traceId.slice(0, 8)}…`;
           message = `${burst.errorCount} erros no trace ${burst.traceId} em ${rule.windowMin} min (${burst.service})`;
           metadata = {
-            traceId: burst.traceId,
+            ...buildTraceLinks([burst.traceId]),
             errorCount: burst.errorCount,
             service: burst.service,
           };

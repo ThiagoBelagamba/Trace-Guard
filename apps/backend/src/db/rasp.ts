@@ -153,3 +153,36 @@ export async function countRaspThreatsInWindow(
 
   return Number(result.rows[0]?.count ?? 0);
 }
+
+export async function listRaspTraceIdsInWindow(
+  windowMin: number,
+  service: string | null,
+  threatType: string | undefined,
+  limit: number
+): Promise<string[]> {
+  const params: unknown[] = [windowMin];
+  let clauses = "";
+
+  if (service) {
+    params.push(service);
+    clauses += ` AND service = $${params.length}`;
+  }
+  if (threatType) {
+    params.push(threatType);
+    clauses += ` AND threat_type = $${params.length}`;
+  }
+  params.push(limit);
+
+  const result = await getPool().query<{ trace_id: string }>(
+    `SELECT trace_id
+     FROM rasp_events
+     WHERE created_at >= NOW() - ($1::int * INTERVAL '1 minute')
+     ${clauses}
+     GROUP BY trace_id
+     ORDER BY MAX(created_at) DESC
+     LIMIT $${params.length}`,
+    params
+  );
+
+  return result.rows.map((row) => row.trace_id);
+}
