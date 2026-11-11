@@ -243,4 +243,19 @@ describe("handleMcpRequest (Model Context Protocol JSON-RPC 2.0)", () => {
     const response = await handleMcpRequest({} as JsonRpcRequest, deps);
     expect(response?.error?.code).toBe(-32600);
   });
+
+  it.each([{}, [], true, 1.5e400])(
+    "rejects an id of invalid type with -32600 and id null: %j",
+    async (badId) => {
+      const response = await handleMcpRequest(
+        { jsonrpc: "2.0", id: badId as never, method: "ping" },
+        deps
+      );
+      expect(response).toEqual({
+        jsonrpc: "2.0",
+        id: null,
+        error: { code: -32600, message: "Invalid JSON-RPC 2.0 request" },
+      });
+    }
+  );
 });

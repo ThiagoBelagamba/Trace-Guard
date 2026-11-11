@@ -47,7 +47,8 @@ export type LlmFallbackReason =
   | "http_error"
   | "network_error"
   | "invalid_response"
-  | "rejected_output";
+  | "rejected_output"
+  | "rate_limited";
 
 export interface TraceInsight {
   traceId: string;

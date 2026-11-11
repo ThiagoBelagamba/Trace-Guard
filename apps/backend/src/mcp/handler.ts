@@ -186,6 +186,21 @@ export async function handleMcpRequest(
     };
   }
 
+  if ("id" in request) {
+    const rawId: unknown = request.id;
+    const validId =
+      rawId === null ||
+      typeof rawId === "string" ||
+      (typeof rawId === "number" && Number.isFinite(rawId));
+    if (!validId) {
+      return {
+        jsonrpc: "2.0",
+        id: null,
+        error: { code: -32600, message: "Invalid JSON-RPC 2.0 request" },
+      };
+    }
+  }
+
   const id = request.id ?? null;
 
   if (request.jsonrpc !== "2.0" || typeof request.method !== "string") {

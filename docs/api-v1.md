@@ -144,6 +144,28 @@ Diagnóstico forense causal do trace. Sintetiza de forma determinística (`sourc
 
 **Resposta 404:** `{ "error": "Trace não encontrado" }`
 
+**`llmFallback`:** quando `AI_API_URL` está configurado mas o refinamento via LLM não é aproveitado, o insight volta com `source: "causal-engine"` e o campo `llmFallback` indicando o motivo:
+
+| Valor | Significado |
+|---|---|
+| `timeout` | O LLM não respondeu dentro de `AI_TIMEOUT_MS` |
+| `http_error` | O LLM respondeu com status HTTP diferente de 2xx |
+| `network_error` | Falha de rede ao chamar o LLM |
+| `invalid_response` | A resposta do LLM não tem o formato esperado |
+| `rejected_output` | A resposta foi descartada pela validação (contradiz o veredito, traz links ou HTML) |
+| `rate_limited` | O orçamento de chamadas por minuto ao LLM foi atingido |
+
+**Variáveis de ambiente relacionadas:**
+
+| Variável | Padrão | Descrição |
+|---|---|---|
+| `AI_API_URL` | — | Endpoint do LLM (compatível com OpenAI ou Ollama); sem ele o motor causal responde sozinho |
+| `AI_TIMEOUT_MS` | `10000` | Tempo máximo de espera pelo LLM |
+| `AI_INSIGHT_CACHE_TTL_MS` | `60000` | Validade do cache de insights por trace |
+| `AI_MAX_CALLS_PER_MINUTE` | `30` | Limite de chamadas reais ao LLM por minuto |
+
+**Cache por trace:** com `AI_API_URL` ativo, o insight gerado pelo LLM é guardado por trace (a chave inclui a quantidade de eventos, eventos RASP e alertas, então dados novos geram um diagnóstico novo). Chamadas simultâneas para o mesmo trace compartilham uma única chamada ao LLM, e resultados de fallback não entram no cache. Configure `API_KEY` quando usar `AI_API_URL`, pois cada chamada pode gerar custo.
+
 ---
 
 ## POST /api/v1/mcp
@@ -168,10 +190,12 @@ curl -X POST http://localhost:3001/api/v1/mcp \
 | Requisição JSON-RPC (mensagem com `id`, inclusive `id: 0`) | `200` com o JSON da resposta |
 | Notificação (mensagem sem `id`, ex.: `notifications/initialized`) | `202` sem corpo |
 | Lote JSON-RPC (array) | `200` com erro `-32600` |
+| `id` de tipo inválido (objeto, array, booleano, número não finito) | `200` com erro `-32600` e `id: null` |
+| Corpo com JSON inválido ou vazio | `400` com erro `-32700` (`Parse error`) e `id: null` |
 | `GET /api/v1/mcp` | `405` com header `Allow: POST` |
 | Header `Origin` fora de `CORS_ORIGIN` | `403` `{ "error": "Origin não permitida" }` |
 
-A validação de `Origin` só se aplica quando a requisição envia o header `Origin` e `CORS_ORIGIN` está definida (lista separada por vírgulas). Clientes sem `Origin` (curl, ponte stdio) sempre passam.
+A validação de `Origin` só se aplica quando a requisição envia o header `Origin` e `CORS_ORIGIN` está definida (lista separada por vírgulas). Clientes sem `Origin` (curl, ponte stdio) sempre passam. A comparação ignora barra final e diferença de maiúsculas/minúsculas, e `CORS_ORIGIN='*'` (ou um item `*` na lista) libera qualquer `Origin`.
 
 **Negociação de versão:** `initialize` devolve a `protocolVersion` enviada pelo cliente se ela for uma das suportadas (`2025-06-18`, `2025-03-26`, `2024-11-05`); caso contrário, responde `2025-06-18`.
 
@@ -179,7 +203,7 @@ A validação de `Origin` só se aplica quando a requisição envia o header `Or
 
 ### Conectar via stdio
 
-Clientes desktop como Claude Desktop e Cursor falam MCP por stdio. A ponte `stdio-bridge-main` lê uma mensagem JSON-RPC por linha no stdin, encaminha cada uma para o endpoint HTTP acima e escreve as respostas no stdout (os logs vão apenas para o stderr). Se o backend estiver fora do ar, cada requisição recebe um erro JSON-RPC `-32603` e a ponte continua ativa.
+Clientes desktop como Claude Desktop e Cursor falam MCP por stdio. A ponte `stdio-bridge-main` lê uma mensagem JSON-RPC por linha no stdin, encaminha cada uma para o endpoint HTTP acima e escreve as respostas no stdout (os logs vão apenas para o stderr). Se o backend estiver fora do ar, cada requisição recebe um erro JSON-RPC `-32603` e a ponte continua ativa. As respostas do backend são reserializadas em uma única linha; um corpo 200 que não seja JSON vira um erro `-32603`, e um HTTP 401 indica que falta definir `TRACEGUARD_API_KEY`.
 
 Variáveis de ambiente:
 

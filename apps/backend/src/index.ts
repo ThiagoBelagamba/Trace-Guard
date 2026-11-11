@@ -47,6 +47,12 @@ async function main(): Promise<void> {
 
   const app = Fastify({ logger: true });
 
+  if (process.env.AI_API_URL?.trim() && !process.env.API_KEY?.trim()) {
+    app.log.warn(
+      "AI_API_URL configurado sem API_KEY: /insight e /mcp ficam abertos e cada chamada pode gerar custo no LLM"
+    );
+  }
+
   await app.register(cors, {
     origin: process.env.CORS_ORIGIN ?? true,
     methods: ["GET", "HEAD", "POST", "PATCH", "DELETE", "OPTIONS"],

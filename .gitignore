@@ -43,4 +43,7 @@ docs/tcc/latex/*.synctex.gz
 
 # Configuração local de agentes e referências do redesign — não versionar
 .agents/
+.claude/
+.alethe/
+skills-lock.json
 traceguard-redesign/

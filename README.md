@@ -17,7 +17,7 @@ pnpm install
 # 2. Configurar variáveis de ambiente
 cp .env.example .env
 
-# 3. Subir infraestrutura (PostgreSQL + RabbitMQ)
+# 3. Subir infraestrutura (PostgreSQL + RabbitMQ + Redis)
 pnpm docker:up
 
 # 4. Build dos pacotes
@@ -99,9 +99,28 @@ Modo monitor (sem bloqueio): `RASP_MODE=monitor pnpm dev:demo-api`
 
 ### Copiloto Forense de Trace & Servidor MCP (Model Context Protocol)
 
-Ao clicar em qualquer `traceId` no dashboard (nas abas Eventos, Segurança ou Alertas), o painel lateral unifica os três pilares (**APM + RASP + Alertas**) e sintetiza um **Diagnóstico Forense Causal** (`GET /api/v1/traces/:traceId/insight`) com causa raiz, pesos heurísticos do RASP, supressão por cooldown e plano de mitigação. Se `AI_API_URL` estiver definido (ex.: Ollama local ou API compatível com OpenAI), um LLM refina a narrativa sobre o grafo causal determinístico; sem LLM externo, o motor causal responde de forma 100% determinística.
+Ao clicar em qualquer `traceId` no dashboard (nas abas Eventos, Segurança ou Alertas), o painel lateral unifica os três pilares (**APM + RASP + Alertas**) e sintetiza um **Diagnóstico Forense Causal** (`GET /api/v1/traces/:traceId/insight`) com causa raiz, pesos heurísticos do RASP, supressão por cooldown e plano de mitigação. Se `AI_API_URL` estiver definido (ex.: Ollama local ou API compatível com OpenAI), um LLM refina a narrativa sobre o grafo causal determinístico; sem LLM externo, o motor causal responde de forma 100% determinística. As chamadas ao LLM são deduplicadas por trace e limitadas por minuto; ao ativar `AI_API_URL`, configure também `API_KEY`, pois sem ela `/insight` e `/mcp` ficam abertos e cada chamada pode gerar custo.
 
 O mesmo diagnóstico é exposto para agentes de IA (Cursor, Claude Desktop, IDEs) via **Model Context Protocol (MCP — JSON-RPC 2.0)** em `POST /api/v1/mcp`, com as ferramentas `investigate_trace`, `list_security_threats` e `alert_fatigue_status`.
+
+Clientes de desktop que só falam MCP via stdio (ex.: Claude Desktop) usam a ponte incluída no backend:
+
+```bash
+pnpm --filter @traceguard/backend build
+TRACEGUARD_MCP_URL=http://localhost:3001/api/v1/mcp TRACEGUARD_API_KEY=<API_KEY> pnpm --filter @traceguard/backend mcp:stdio
+```
+
+Variáveis do Copiloto (todas opcionais; veja `.env.example`):
+
+| Variável | Padrão | Função |
+|---|---|---|
+| `AI_API_URL` | — | Endpoint compatível com OpenAI/Ollama; vazio usa só o Motor Causal |
+| `AI_MODEL` / `AI_API_KEY` | `gpt-4o-mini` / — | Modelo e chave do endpoint |
+| `AI_TIMEOUT_MS` | `10000` | Tempo máximo da chamada ao LLM antes do fallback |
+| `AI_INSIGHT_CACHE_TTL_MS` | `60000` | Tempo de cache do diagnóstico refinado por trace |
+| `AI_MAX_CALLS_PER_MINUTE` | `30` | Orçamento de chamadas ao LLM; acima disso responde o Motor Causal (`llmFallback: "rate_limited"`) |
+
+Bancos criados antes do Copiloto: rode `pnpm db:migrate` (ou só `pnpm db:migrate:alert-index`) para criar os índices que ligam alertas aos traces.
 
 ## Fase 5 — Uptime, Webhook e Redis
 
@@ -173,6 +192,8 @@ pnpm experiment:overhead  # Exp. 3 — p50/p95 health + ingest
 Clique em um **Trace ID** no dashboard para abrir o detalhe correlacionado (APM + RASP).
 
 ## Teste manual de ingestão
+
+Com `API_KEY` definido no `.env`, inclua `-H "x-api-key: <API_KEY>"` nas chamadas.
 
 ```bash
 curl -X POST http://localhost:3001/api/v1/ingest \

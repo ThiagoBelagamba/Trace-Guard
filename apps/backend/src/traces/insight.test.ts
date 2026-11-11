@@ -37,6 +37,10 @@ function raspDetail(
   };
 }
 
+function raspWith(overrides: Partial<RaspEvent>): RaspEvent {
+  return raspDetail(overrides).raspEvents[0]!;
+}
+
 describe("RASP diagnosis wording", () => {
   it("uses the threshold recorded by the SDK instead of a hardcoded 70", () => {
     const insight = synthesizeTraceInsight(
@@ -113,6 +117,68 @@ describe("RASP diagnosis wording", () => {
     expect(chain).toContain("modo monitor");
     expect(chain).not.toContain("abaixo do limiar");
   });
+
+  it("falls back to threatType when metadata.threats is empty", () => {
+    const detail = raspDetail({
+      threatType: "rate_limit",
+      clientIp: "203.0.113.1",
+      metadata: { threats: [] },
+    });
+    const insight = synthesizeTraceInsight(detail);
+    expect(insight.narrative).toContain("(excesso de requisições por minuto (+40), totalizando");
+    expect(insight.rootCause.summary).toBe(
+      "excesso de requisições por minuto (+40) a partir de 203.0.113.1"
+    );
+    expect(insight.headline).toContain("excesso de requisições");
+  });
+
+  it("falls back to threatType when metadata.threats holds no strings", () => {
+    const detail = raspDetail({
+      threatType: "rate_limit",
+      clientIp: "203.0.113.1",
+      metadata: { threats: [1, null] },
+    });
+    const insight = synthesizeTraceInsight(detail);
+    expect(insight.rootCause.summary).toBe(
+      "excesso de requisições por minuto (+40) a partir de 203.0.113.1"
+    );
+  });
+
+  it("does not claim 'abaixo do limiar' when block mode logged a score at or above it", () => {
+    const detail = raspDetail({
+      action: "logged",
+      score: 100,
+      metadata: { threats: ["sequential_scan", "rate_limit"], mode: "block", blockThreshold: 70 },
+    });
+    const insight = synthesizeTraceInsight(detail);
+    const chain = insight.causalChain.join(" | ");
+    expect(chain).not.toContain("abaixo do limiar");
+    expect(chain).toContain("(score 100 >= limiar 70, mas o SDK não bloqueou)");
+    expect(insight.recommendations[0]).toBe(
+      "Score 100 atingiu o limiar 70 sem bloqueio; conferir RASP_MODE e a versão do SDK em demo-api."
+    );
+  });
+
+  it("keeps 'abaixo do limiar' when block mode logged a score under the threshold", () => {
+    const detail = raspDetail({
+      action: "logged",
+      score: 50,
+      metadata: { threats: ["bot_user_agent"], mode: "block", blockThreshold: 70 },
+    });
+    const insight = synthesizeTraceInsight(detail);
+    expect(insight.causalChain.join(" | ")).toContain("(score 50 abaixo do limiar 70)");
+    expect(insight.recommendations[0]).toContain("abaixo do limiar 70");
+  });
+
+  it("uses the default threshold in the wording when the recorded one is invalid", () => {
+    const detail = raspDetail({
+      action: "logged",
+      score: 50,
+      metadata: { threats: ["bot_user_agent"], blockThreshold: 0 },
+    });
+    const insight = synthesizeTraceInsight(detail);
+    expect(insight.causalChain.join(" | ")).toContain("(score 50 abaixo do limiar 70)");
+  });
 });
 
 describe("resolveRaspPolicy", () => {
@@ -128,6 +194,19 @@ describe("resolveRaspPolicy", () => {
     expect(
       resolveRaspPolicy({ ...base, action: "blocked", metadata: undefined })
     ).toEqual({ blockThreshold: 70, mode: "unknown" });
+  });
+
+  it.each([0, -5, 101, Number.NaN, Number.POSITIVE_INFINITY])(
+    "ignores an invalid recorded threshold %s",
+    (blockThreshold) => {
+      expect(resolveRaspPolicy(raspWith({ metadata: { blockThreshold } })).blockThreshold).toBe(70);
+    }
+  );
+
+  it.each([1, 60, 100])("accepts a valid recorded threshold %s", (blockThreshold) => {
+    expect(resolveRaspPolicy(raspWith({ metadata: { blockThreshold } })).blockThreshold).toBe(
+      blockThreshold
+    );
   });
 });
 
@@ -425,6 +504,84 @@ describe("generateTraceInsight", () => {
     expect(insight.source).toBe("llm");
     expect(insight.llmFallback).toBeUndefined();
     expect(insight.headline).toBe("Varredura bloqueada");
+  });
+
+  it("never labels malformed trace data as network_error", async () => {
+    const malformed: TraceDetail = {
+      ...sampleDetail,
+      events: [
+        {
+          id: "ev-bad",
+          traceId: sampleDetail.traceId,
+          spanId: null,
+          service: "demo-api",
+          level: "info",
+          message: null as unknown as string,
+          metadata: {},
+          durationMs: null,
+          createdAt: "2026-11-07T04:03:00.000Z",
+        },
+      ],
+      raspEvents: [
+        {
+          ...sampleDetail.raspEvents[0]!,
+          userAgent: 123 as unknown as string,
+          metadata: { threats: { a: 1 } },
+        },
+      ],
+    };
+
+    const insight = await generateTraceInsight(malformed, {
+      apiUrl: "http://llm.local/v1",
+      fetchImpl: async () =>
+        new Response(
+          JSON.stringify({
+            choices: [
+              {
+                message: {
+                  content: JSON.stringify({
+                    headline: "Varredura bloqueada",
+                    narrative: "IP 198.51.100.7 bloqueado.",
+                    recommendations: ["Revisar a rota"],
+                  }),
+                },
+              },
+            ],
+          }),
+          { status: 200 }
+        ),
+      logger: () => {},
+    });
+
+    expect(insight.source).toBe("llm");
+    expect(insight.llmFallback).toBeUndefined();
+  });
+
+  it("keeps the causal engine when the LLM absolves the attack with a synonym", async () => {
+    const insight = await generateTraceInsight(sampleDetail, {
+      apiUrl: "http://llm.local/v1",
+      fetchImpl: async () =>
+        new Response(
+          JSON.stringify({
+            choices: [
+              {
+                message: {
+                  content: JSON.stringify({
+                    headline: "Isto não é um ataque",
+                    narrative: "Tráfego legítimo de um parceiro.",
+                    recommendations: ["Nenhuma"],
+                  }),
+                },
+              },
+            ],
+          }),
+          { status: 200 }
+        ),
+      logger: () => {},
+    });
+
+    expect(insight.source).toBe("causal-engine");
+    expect(insight.llmFallback).toBe("rejected_output");
   });
 
   it("reports a timeout fallback and logs it", async () => {

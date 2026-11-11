@@ -110,13 +110,13 @@ Quando uma requisição é bloqueada, a resposta é:
 | `enabled` | `true` | Liga/desliga o módulo RASP. |
 | `mode` | `"block"` | `"monitor"` (só registra) ou `"block"` (403 ao exceder o threshold). |
 | `maxRequestsPerMinute` | `60` | Limite por IP em janela de 60s. |
-| `blockThreshold` | `70` | Score mínimo (0–100) para bloquear. |
+| `blockThreshold` | `70` | Score mínimo (1–100) para bloquear. |
 | `sequentialScanThreshold` | `20` | Paths distintos por IP em 60s para sinalizar varredura. |
 | `redisUrl` | — | Se definido, usa Redis para rate limit distribuído. |
 
 ## Heurísticas RASP
 
-Os scores são somados (limitados a 100) e o `threatType` primário é o de maior severidade.
+Os scores são somados (limitados a 100) e o `threatType` primário é o de maior severidade. Os pesos vêm de `RASP_THREAT_WEIGHTS` em `@traceguard/shared`, a mesma fonte usada pelo Copiloto Forense do backend. Cada evento RASP enviado registra em `metadata` as heurísticas disparadas (`threats`), o `blockThreshold` e o `mode` vigentes, para o diagnóstico citar a política real da aplicação.
 
 | Tipo | Detecção | Score |
 |---|---|---|

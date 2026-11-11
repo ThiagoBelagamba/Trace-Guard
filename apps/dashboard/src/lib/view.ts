@@ -114,6 +114,7 @@ const LLM_FALLBACK_LABELS: Record<LlmFallbackReason, string> = {
   network_error: "falha de rede",
   invalid_response: "resposta inválida",
   rejected_output: "resposta rejeitada",
+  rate_limited: "limite de chamadas",
 };
 
 /** Origem do diagnóstico no cabeçalho do card: LLM, motor causal ou motor causal após falha do LLM. */

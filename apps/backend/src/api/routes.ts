@@ -12,11 +12,12 @@ import { toDashboardEvent } from "../db/mappers.js";
 import { getEventStats, listEventsByTraceId, listRecentEvents } from "../db/pool.js";
 import { getRaspStats, listRaspEventsByTraceId, listRecentRaspEvents } from "../db/rasp.js";
 import { handleMcpRequest, type JsonRpcRequest } from "../mcp/handler.js";
+import { toMcpParseError } from "../mcp/http-errors.js";
 import { isMcpOriginAllowed } from "../mcp/origin.js";
 import { publishLogEvents } from "../publishers/rabbitmq.js";
 import { eventHub } from "../realtime/event-hub.js";
 import { getTraceDetail } from "../traces/get-trace.js";
-import { generateTraceInsight } from "../traces/insight.js";
+import { createInsightService } from "../traces/insight-service.js";
 
 async function lookupTrace(traceId: string) {
   return getTraceDetail(traceId, {
@@ -30,6 +31,8 @@ async function lookupTrace(traceId: string) {
 }
 
 export async function registerRoutes(app: FastifyInstance): Promise<void> {
+  const insightService = createInsightService();
+
   app.get("/health", async () => {
     return {
       status: "ok",
@@ -94,7 +97,7 @@ export async function registerRoutes(app: FastifyInstance): Promise<void> {
         return reply.status(404).send({ error: "Trace não encontrado" });
       }
 
-      return generateTraceInsight(detail);
+      return insightService.getInsight(detail);
     }
   );
 
@@ -102,7 +105,17 @@ export async function registerRoutes(app: FastifyInstance): Promise<void> {
     return reply.status(405).header("Allow", "POST").send();
   });
 
-  app.post("/api/v1/mcp", async (request, reply) => {
+  app.post(
+    "/api/v1/mcp",
+    {
+      // Corpo JSON inválido vira erro JSON-RPC (-32700); demais erros seguem o handler padrão.
+      errorHandler: (error, _request, reply) => {
+        const rpcError = toMcpParseError(error);
+        if (rpcError) return reply.status(400).send(rpcError);
+        throw error;
+      },
+    },
+    async (request, reply) => {
     if (!isMcpOriginAllowed(request.headers.origin, process.env.CORS_ORIGIN)) {
       return reply.status(403).send({ error: "Origin não permitida" });
     }
@@ -110,6 +123,7 @@ export async function registerRoutes(app: FastifyInstance): Promise<void> {
     const body = (request.body ?? {}) as JsonRpcRequest;
     const response = await handleMcpRequest(body, {
       getTrace: lookupTrace,
+      generateInsight: (detail) => insightService.getInsight(detail),
       getRaspOverview: async (limit) => {
         const [stats, events] = await Promise.all([
           getRaspStats(),
@@ -130,7 +144,8 @@ export async function registerRoutes(app: FastifyInstance): Promise<void> {
       return reply.status(202).send();
     }
     return reply.status(200).send(response);
-  });
+    }
+  );
 
   app.get<{ Querystring: { since?: string; bucket?: string } }>(
     "/api/v1/events/stats",

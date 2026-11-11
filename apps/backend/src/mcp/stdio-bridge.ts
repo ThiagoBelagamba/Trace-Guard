@@ -51,9 +51,21 @@ export async function forwardMessage(
 
   if (result.status < 200 || result.status >= 300) {
     if (!hasId) return null;
+    if (result.status === 401) {
+      return errorLine(
+        id,
+        -32603,
+        "Backend respondeu HTTP 401: defina TRACEGUARD_API_KEY com o valor de API_KEY do backend"
+      );
+    }
     return errorLine(id, -32603, `Backend respondeu HTTP ${result.status}`);
   }
 
   if (!result.text.trim()) return null;
-  return result.text;
+  try {
+    return JSON.stringify(JSON.parse(result.text));
+  } catch {
+    if (!hasId) return null;
+    return errorLine(id, -32603, "Backend devolveu resposta que não é JSON");
+  }
 }

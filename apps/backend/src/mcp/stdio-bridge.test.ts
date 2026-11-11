@@ -31,11 +31,43 @@ describe("forwardMessage", () => {
   });
 
   it("maps non-2xx statuses to a JSON-RPC error carrying the request id", async () => {
-    const post: McpPost = async () => ({ status: 401, text: "unauthorized" });
+    const post: McpPost = async () => ({ status: 500, text: "boom" });
     const parsed = JSON.parse((await forwardMessage(ping, post))!);
     expect(parsed.id).toBe(7);
     expect(parsed.error.code).toBe(-32603);
-    expect(parsed.error.message).toBe("Backend respondeu HTTP 401");
+    expect(parsed.error.message).toBe("Backend respondeu HTTP 500");
+  });
+
+  it("re-serializes a pretty-printed backend body into a single line", async () => {
+    const post: McpPost = async () => ({
+      status: 200,
+      text: '{\n  "jsonrpc": "2.0",\n  "id": 7,\n  "result": {}\n}',
+    });
+    expect(await forwardMessage(ping, post)).toBe(
+      '{"jsonrpc":"2.0","id":7,"result":{}}'
+    );
+  });
+
+  it("turns a non-JSON 200 body into a JSON-RPC error", async () => {
+    const post: McpPost = async () => ({
+      status: 200,
+      text: "<html>proxy</html>",
+    });
+    expect(JSON.parse((await forwardMessage(ping, post))!)).toEqual({
+      jsonrpc: "2.0",
+      id: 7,
+      error: {
+        code: -32603,
+        message: "Backend devolveu resposta que não é JSON",
+      },
+    });
+  });
+
+  it("explains how to fix a 401", async () => {
+    const post: McpPost = async () => ({ status: 401, text: "{}" });
+    expect(JSON.parse((await forwardMessage(ping, post))!).error.message).toBe(
+      "Backend respondeu HTTP 401: defina TRACEGUARD_API_KEY com o valor de API_KEY do backend"
+    );
   });
 
   it("keeps answering when the backend is down", async () => {

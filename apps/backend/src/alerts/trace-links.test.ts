@@ -14,6 +14,16 @@ describe("buildTraceLinks", () => {
     expect(buildTraceLinks([])).toEqual({});
   });
 
+  it("trims ids and drops blank, UNKNOWN in any case and the all-zero W3C id", () => {
+    expect(
+      buildTraceLinks(["  ", " a ", "a", "UNKNOWN", "0".repeat(32), "b"])
+    ).toEqual({ traceId: "a", traceIds: ["a", "b"] });
+  });
+
+  it("returns an empty object when max is below 1", () => {
+    expect(buildTraceLinks(["a"], 0)).toEqual({});
+  });
+
   it("truncates to the maximum number of linked traces", () => {
     const ids = Array.from({ length: 60 }, (_, i) => `t${i}`);
     const links = buildTraceLinks(ids);

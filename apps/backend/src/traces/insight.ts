@@ -26,9 +26,11 @@ function isKnownThreat(key: string): key is RaspThreatType {
 }
 
 function threatKeys(rasp: RaspEvent): string[] {
-  const rawThreats = Array.isArray(rasp.metadata?.threats)
+  const listedThreats = Array.isArray(rasp.metadata?.threats)
     ? rasp.metadata.threats.filter((t): t is string => typeof t === "string")
-    : [rasp.threatType];
+    : [];
+  // Lista ausente, vazia ou sem strings: o tipo do evento é a única heurística conhecida.
+  const rawThreats = listedThreats.length > 0 ? listedThreats : [rasp.threatType];
   return Array.from(new Set(rawThreats));
 }
 
@@ -61,7 +63,10 @@ export function resolveRaspPolicy(rasp: RaspEvent): {
 } {
   const recordedThreshold = rasp.metadata?.blockThreshold;
   const blockThreshold =
-    typeof recordedThreshold === "number" && Number.isFinite(recordedThreshold)
+    typeof recordedThreshold === "number" &&
+    Number.isFinite(recordedThreshold) &&
+    recordedThreshold >= 1 &&
+    recordedThreshold <= 100
       ? recordedThreshold
       : DEFAULT_RASP_BLOCK_THRESHOLD;
 
@@ -114,7 +119,9 @@ export function synthesizeTraceInsight(
       ? `Ação em runtime: requisição interceptada com HTTP 403 no span ${spanId} (score ${score} >= limiar ${blockThreshold}).`
       : mode === "monitor"
         ? `Ação em runtime: requisição registrada em modo monitor, sem bloqueio, no span ${spanId} (score ${score}, limiar ${blockThreshold}).`
-        : `Ação em runtime: requisição registrada sem bloqueio no span ${spanId} (score ${score} abaixo do limiar ${blockThreshold}).`;
+        : score >= blockThreshold
+          ? `Ação em runtime: requisição registrada sem bloqueio no span ${spanId} (score ${score} >= limiar ${blockThreshold}, mas o SDK não bloqueou).`
+          : `Ação em runtime: requisição registrada sem bloqueio no span ${spanId} (score ${score} abaixo do limiar ${blockThreshold}).`;
 
     const causalChain: string[] = [
       `Origem ${primaryRasp.clientIp} enviou ${method} ${path}${primaryRasp.userAgent ? ` (UA: ${primaryRasp.userAgent})` : ""}.`,
@@ -141,6 +148,10 @@ export function synthesizeTraceInsight(
     } else if (mode === "monitor") {
       recommendations.push(
         `Ativar RASP_MODE=block em produção para interromper requisições com score >= ${blockThreshold} antes do controller.`
+      );
+    } else if (score >= blockThreshold) {
+      recommendations.push(
+        `Score ${score} atingiu o limiar ${blockThreshold} sem bloqueio; conferir RASP_MODE e a versão do SDK em ${primaryRasp.service}.`
       );
     } else if (score < blockThreshold) {
       recommendations.push(

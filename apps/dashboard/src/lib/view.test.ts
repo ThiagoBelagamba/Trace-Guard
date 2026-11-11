@@ -190,6 +190,9 @@ describe("forensic insight & MCP helpers", () => {
       expect(insightSourceLabel({ ...insight, llmFallback: "rejected_output" })).toBe(
         "Motor Causal · LLM indisponível (resposta rejeitada)"
       );
+      expect(insightSourceLabel({ ...insight, llmFallback: "rate_limited" })).toBe(
+        "Motor Causal · LLM indisponível (limite de chamadas)"
+      );
     });
   });
 
