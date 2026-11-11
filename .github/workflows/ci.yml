@@ -18,5 +18,6 @@ jobs:
           node-version: 20
           cache: pnpm
       - run: pnpm install --frozen-lockfile
+      - run: pnpm --filter @traceguard/shared build
       - run: pnpm test
       - run: pnpm --filter @traceguard/shared --filter @traceguard/sdk --filter @traceguard/backend build
