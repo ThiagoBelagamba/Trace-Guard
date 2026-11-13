@@ -1,0 +1,20 @@
+{
+  "id": "C01",
+  "titulo": "R1–R3, roteamento por idioma, limiar 0,85",
+  "status": "pre-registrada",
+  "motivada_por": [],
+  "variante": "sdk",
+  "checkpoint": "roteamento",
+  "limiares": {
+    "prompt_injection": 0.85,
+    "secret_leak": 0.85
+  },
+  "min_confidence": 0.8,
+  "padroes_credencial": false,
+  "conjunto_ajuste": [
+    "dev"
+  ],
+  "conjunto_teste": "validation",
+  "criterio": "tres-condicoes-v1",
+  "referencia": "C00"
+}

@@ -1,12 +1,14 @@
-# ADR 009 — Copiloto Forense de Trace e Servidor Model Context Protocol (MCP)
+# ADR 011 — Copiloto Forense de Trace e Servidor Model Context Protocol (MCP)
 
 ## Status
 
 Aceito
 
+Substitui: ADR 009 e ADR 010
+
 ## Contexto
 
-Colocar um classificador probabilístico de linguagem no caminho de detecção RASP introduz falsos positivos e falsos negativos na decisão de bloqueio, além de depender de checkpoints pesados. Por outro lado, operadores de PMEs e agentes de IA em IDEs modernas (via Model Context Protocol — MCP) precisam investigar rapidamente **por que** um `traceId` sofreu bloqueio RASP, gerou erro em cascata ou acionou/suprimiu alertas.
+Colocar um classificador probabilístico de linguagem no caminho de detecção RASP introduz falsos positivos e falsos negativos na decisão de bloqueio, além de depender de checkpoints pesados. No Experimento 4, a configuração pré-registrada C10 teve 29/132 (0,220) falsos positivos em legítimos difíceis, acima do máximo de 0,186 (24/132), e não passou. Por outro lado, operadores de PMEs e agentes de IA em IDEs modernas (via Model Context Protocol — MCP) precisam investigar rapidamente **por que** um `traceId` sofreu bloqueio RASP, gerou erro em cascata ou acionou/suprimiu alertas.
 
 A tese central do TraceGuard é que o mesmo `traceId` W3C liga APM, RASP e alertas. Uma camada de IA/diagnóstico posicionada na **investigação do `traceId`** aproveita essa correlação sem comprometer o determinismo nem o orçamento de `< 2 ms` do middleware RASP.
 

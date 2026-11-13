@@ -56,3 +56,10 @@ Comando: `pnpm experiment:overhead`. 80 amostras.
 | POST /api/v1/ingest | 2.0 | 1.8 | 3.2 |
 
 p95 do ingest (3.2 ms) está muito abaixo do alvo de 500 ms do k6. Documente CPU/RAM na monografia.
+
+### Experimento 4 — LAYA (alternativa descartada)
+
+- **Protocolo:** configurações pré-registradas em `docs/tcc/experimento-4-registro/`, com conjuntos separados de desenvolvimento, validação e teste; o teste roda uma vez por configuração.
+- **Resultado:** no conjunto de teste, a configuração C10 subiu o F1 de 0,521 (C00) para 0,663 e o recall de `secret_leak` de 0,125 para 0,688, mas teve 29/132 (0,220) falsos positivos em legítimos difíceis, contra o máximo de 0,186.
+- **Veredito:** C10 não passou no critério `tres-condicoes-v1`.
+- **Decisão:** a LAYA saiu do produto e foi substituída pelo Copiloto Forense (ADR 011). O código do experimento está na *tag* `exp4-laya-final`.

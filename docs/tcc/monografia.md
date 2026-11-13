@@ -133,7 +133,7 @@ Tipos: `error_rate`, `error_count`, `error_burst`, `rasp_threat_count`, `uptime_
 
 ### 5.5 Copiloto Forense de Trace e Model Context Protocol (MCP)
 
-Para transformar a correlação por `traceId` em diagnóstico acionável sem introduzir falso positivo no caminho quente, o backend expõe `GET /api/v1/traces/:traceId/insight` e um servidor **Model Context Protocol (MCP — JSON-RPC 2.0)** em `POST /api/v1/mcp` (ADR 009). O motor causal determinístico cruza spans APM, eventos RASP e alertas (acionáveis e suprimidos) em `< 1 ms`, explicando os pesos heurísticos e a cadeia causal; opcionalmente, refina o resumo via LLM compatível com OpenAI/Ollama (`AI_API_URL`) mantendo fallback determinístico.
+Para transformar a correlação por `traceId` em diagnóstico acionável sem introduzir falso positivo no caminho quente, o backend expõe `GET /api/v1/traces/:traceId/insight` e um servidor **Model Context Protocol (MCP — JSON-RPC 2.0)** em `POST /api/v1/mcp` (ADR 011). O motor causal determinístico cruza spans APM, eventos RASP e alertas (acionáveis e suprimidos) em `< 1 ms`, explicando os pesos heurísticos e a cadeia causal; opcionalmente, refina o resumo via LLM compatível com OpenAI/Ollama (`AI_API_URL`) mantendo fallback determinístico.
 
 ---
 
